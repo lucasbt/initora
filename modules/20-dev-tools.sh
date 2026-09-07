@@ -535,13 +535,12 @@ EOF
 }
 
 # =============================================================================
-# AI CLI Tools (Gemini CLI + OpenCode)
+# AI CLI Tools (Antigravity CLI + OpenCode)
 # =============================================================================
  
 # Agregador — ponto único de entrada para os dois instaladores
 _install_ai_cli_tools() {
   _install_antigravity_cli
-  _install_copilot
   _install_opencode
 }
  
@@ -569,41 +568,6 @@ _install_antigravity_cli() {
   ok "Antigravity CLI ready"
 }
 
-# ── github copilot ──────────────────────────────────
-_install_copilot() {
-  local user="${SETUP_USER:-$USER}"
-  local user_home="${SETUP_HOME:-$HOME}"
-  local nvm_dir="${user_home}/.nvm"
-  local pkg="@github/copilot"
-
-  step "Installing/Updating Copilot CLI"
-
-  sudo -u "$user" bash -c "
-    export NVM_DIR=\"${nvm_dir}\"
-    [[ -s \"\$NVM_DIR/nvm.sh\" ]] && source \"\$NVM_DIR/nvm.sh\"
-
-    CURRENT=\$(copilot --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo 'none')
-    LATEST=\$(npm view $pkg version 2>/dev/null || echo 'unknown')
-
-    echo \"Current: \$CURRENT\"
-    echo \"Latest:  \$LATEST\"
-
-    if [[ \"\$CURRENT\" == \"\$LATEST\" && -n \"\$CURRENT\" ]]; then
-      echo \"Already up to date. Skipping install.\"
-      exit 0
-    fi
-
-    npm install -g $pkg@latest --loglevel=error --engine-strict=false
-
-    echo \"Updated: \$(copilot --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo 'unknown')\"
-  " || {
-    log_error "Failed to install/update GitHub Copilot CLI"
-    return 1
-  }
-
-  ok "Copilot CLI ready"
-}
- 
 # ── OpenCode (binário Go via script oficial) ──────────────────────────────────
 _install_opencode() {
   local user="${SETUP_USER:-$USER}"

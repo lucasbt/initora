@@ -6,7 +6,6 @@
 
 # --- Editor / IDE ---
 code                      # VSCode (repositório Microsoft)
-neovim
 
 # --- Dev Tools ---
 git
@@ -174,11 +173,6 @@ hplip-common
 hplip-libs
 util-linux-user
 fragments
-geany
-geany-plugins-lineoperations
-geany-plugins-lsp
-geany-plugins-markdown
-geany-plugins-pairtaghighlighter
 
 # Misc
 xorg-x11-font-utils
