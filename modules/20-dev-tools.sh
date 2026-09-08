@@ -873,7 +873,7 @@ _install_ides() {
     skip "IntelliJ already installed"
   else
     local json url tar
-    json=$(curl -s "https://data.services.jetbrains.com/products/releases?code=IIC&latest=true&type=release")
+    json=$(curl -s "https://data.services.jetbrains.com/products/releases?code=IIU&latest=true&type=release")
     url=$(echo "$json" | jq -r '.IIC[0].downloads.linux.link')
     tar="$CACHE_DIR/intellij.tar.gz"
 
@@ -884,7 +884,7 @@ _install_ides() {
 
     sudo tee /usr/share/applications/intellij.desktop >/dev/null <<EOF
 [Desktop Entry]
-Name=IntelliJ IDEA Community
+Name=IntelliJ IDEA
 Exec=/opt/intellij/bin/idea.sh
 Icon=/opt/intellij/bin/idea.svg
 Type=Application
@@ -909,64 +909,7 @@ EOF
   fi
 
   _configure_vscode
-
-  _install_pulsar
   
-}
-
-_install_pulsar() {
-    step "Installing Pulsar"
-    log_info "Querying latest Pulsar release from GitHub..."
-
-    local tag github_version installed_version
-    local release_json rpm_asset rpm_file arch
-
-    tag=$(curl -fsSL https://api.github.com/repos/pulsar-edit/pulsar/releases/latest \
-        | grep -oP '"tag_name":\s*"\K([^"]+)')
-
-    if [[ -z "$tag" ]]; then
-        log_error "Unable to identify the latest Pulsar version on GitHub"
-        return 1
-    fi
-
-    github_version="${tag#v}"
-
-    log_info "Latest Pulsar release: ${github_version}"
-
-    if installed_version=$(get_installed_version pulsar); then
-        log_info "Installed Pulsar version: ${installed_version}"
-
-        if version_ge "$installed_version" "$github_version"; then
-            skip "Pulsar already up to date (${installed_version})"
-            return
-        fi
-    fi
-
-    log_info "Installing/Updating Pulsar..."
-
-    release_json=$(curl -fsSL \
-        "https://api.github.com/repos/pulsar-edit/pulsar/releases/tags/${tag}")
-
-    rpm_asset=$(echo "$release_json" \
-      | grep -oP 'browser_download_url":\s*"\K([^"]*Linux\.pulsar[^"]*x86_64\.rpm)')
-
-    if [[ -z "$rpm_asset" ]]; then
-        log_error "Could not find Pulsar RPM asset for $arch"
-        return 1
-    fi
-
-    rpm_file="${CACHE_DIR}/$(basename "$rpm_asset")"
-
-    if [[ ! -f "$rpm_file" ]]; then
-        log_info "Downloading Pulsar RPM..."
-        curl -fL "$rpm_asset" -o "$rpm_file"
-    else
-        log_info "Using cached RPM: $rpm_file"
-    fi
-
-    dnf_install "$rpm_file"
-
-    ok "Pulsar installed/updated to ${github_version}"
 }
 
 _configure_vscode() {
