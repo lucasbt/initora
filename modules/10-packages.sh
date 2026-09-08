@@ -56,7 +56,7 @@ _install_obsidian() {
     fi
 
     # -------------------------------------------------------------------------
-    # Dependências
+    # Dependência necessária para consultar os assets das releases
     # -------------------------------------------------------------------------
     if ! command -v jq >/dev/null 2>&1; then
         log_error "jq is required to query GitHub release assets"
@@ -64,14 +64,22 @@ _install_obsidian() {
     fi
 
     # -------------------------------------------------------------------------
-    # Busca a release mais recente que possua um AppImage
+    # Busca a release mais recente que possua um AppImage compatível
     #
-    # A API do GitHub retorna as releases em ordem decrescente:
-    # latest -> anterior -> anterior -> ...
+    # A API retorna as releases em ordem decrescente.
     #
-    # Portanto, basta percorrer as releases até encontrar um asset .AppImage.
+    # Queremos:
+    #   Obsidian-1.13.7.AppImage
+    #
+    # e ignoramos:
+    #   Obsidian-1.13.7-arm64.AppImage
+    #   Obsidian-1.13.7-aarch64.AppImage
+    #   Obsidian-1.13.7-armhf.AppImage
+    #
+    # Caso a release mais recente não possua o AppImage genérico,
+    # a próxima release é analisada, e assim por diante.
     # -------------------------------------------------------------------------
-    log_info "Searching for latest Obsidian release with AppImage..."
+    log_info "Searching for latest Obsidian release with x86_64 AppImage..."
 
     local releases_json
     if ! releases_json=$(curl -fsSL --max-time 30 \
@@ -92,6 +100,12 @@ _install_obsidian() {
                         .assets[]
                         | select(
                             (.name | ascii_downcase | endswith(".appimage"))
+                            and
+                            ((.name | ascii_downcase | contains("arm64")) | not)
+                            and
+                            ((.name | ascii_downcase | contains("aarch64")) | not)
+                            and
+                            ((.name | ascii_downcase | contains("armhf")) | not)
                         )
                     ]
                 }
@@ -101,7 +115,7 @@ _install_obsidian() {
         ')
 
     if [[ -z "$release_json" || "$release_json" == "null" ]]; then
-        log_error "Could not find any Obsidian release with an AppImage"
+        log_error "Could not find any Obsidian release with a compatible AppImage"
         return 1
     fi
 
@@ -117,7 +131,8 @@ _install_obsidian() {
         jq -r '.assets[0].name')
 
     if [[ -z "$latest_tag" || "$latest_tag" == "null" ||
-          -z "$appimage_url" || "$appimage_url" == "null" ]]; then
+          -z "$appimage_url" || "$appimage_url" == "null" ||
+          -z "$appimage_name" || "$appimage_name" == "null" ]]; then
         log_error "Could not resolve Obsidian AppImage asset"
         return 1
     fi
@@ -142,6 +157,10 @@ _install_obsidian() {
     fi
 
     sudo chmod +x "$dest"
+
+    # -------------------------------------------------------------------------
+    # Cria/atualiza symlink
+    # -------------------------------------------------------------------------
     sudo ln -sf "$dest" "$symlink"
 
     log_info "Symlink created: $symlink → $dest"
@@ -177,7 +196,6 @@ EOF
 
     ok "Obsidian ${version} installed → ${dest}"
 }
-
 
 _install_bitwarden_gui() {
     step "Installing Bitwarden (GUI)"
