@@ -874,7 +874,7 @@ _install_ides() {
   else
     local json url tar
     json=$(curl -s "https://data.services.jetbrains.com/products/releases?code=IIU&latest=true&type=release")
-    url=$(echo "$json" | jq -r '.IIC[0].downloads.linux.link')
+    url=$(echo "$json" | jq -r '.IIU[0].downloads.linux.link')
     tar="$CACHE_DIR/intellij.tar.gz"
 
     cached_download "$url" "$tar"
