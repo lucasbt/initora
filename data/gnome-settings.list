@@ -118,3 +118,5 @@ org.gnome.Ptyxis audible-bell ${PTYXIS_AUDIBLE_BELL}
 org.gnome.Ptyxis new-tab-position "${PTYXIS_NEW_TAB_POSITION}"
 org.gnome.Ptyxis cursor-shape 'underline'
 org.gnome.Ptyxis use-system-font "${PTYXIS_USE_SYSTEM_FONT}"
+
+org.gnome.desktop.interface gtk-enable-primary-paste true
