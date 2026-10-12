@@ -226,7 +226,7 @@ Type=Application
 Name=Initora
 GenericName=Fedora Workstation Bootstrap
 Comment=Bootstrap your Developer Fedora Workstation
-Exec=ptyxis --title="Initora - Fedora Workstation Bootstrap for Developers" -x bash -c 'initora; status=$?; echo; if [ "$status" -eq 0 ]; then echo "Initora completed successfully."; else echo "Initora exited with an error (code $status)."; fi; echo; read -n 1 -s -r -p "Press any key to close..."'
+Exec=ptyxis --title="Initora - Fedora Workstation Bootstrap for Developers" -x bash -c 'initora; status=\$?; echo; if [ "\$status" -eq 0 ]; then echo "Initora completed successfully."; else echo "Initora exited with an error (code \$status)."; fi; echo; read -n 1 -s -r -p "Press any key to close..."'
 Icon=${icon_path}
 Terminal=false
 Categories=Utility;System;Development;
