@@ -30,7 +30,7 @@ Type=Application
 Name=Initora
 GenericName=Fedora Workstation Bootstrap
 Comment=Bootstrap your Developer Fedora Workstation
-ptyxis --title="Initora - Fedora Workstation Bootstrap for Developers" -- bash -c '(initora); read -p "Press Enter to close..."'
+Exec=ptyxis --title="Initora - Fedora Workstation Bootstrap for Developers" -- bash -c '(initora); read -p "Press Enter to close..."'
 Icon=${icon_path}
 Terminal=false
 Categories=Utility;System;Development;
