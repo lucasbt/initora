@@ -24,24 +24,19 @@ migration_0001_desktop_entry() {
 
   mkdir -p "$desktop_dir"
 
-# Generate the desktop entry
-  {
-    cat << 'DESKTOPEOF'
+  cat > "$desktop_file" << DESKTOPEOF
 [Desktop Entry]
 Type=Application
 Name=Initora
 GenericName=Fedora Workstation Bootstrap
 Comment=Bootstrap your Developer Fedora Workstation
-Exec=ptyxis --title="Initora - Fedora Workstation Bootstrap for Developers" -x bash -c 'initora; status=$?; echo; if [ "$status" -eq 0 ]; then echo "Initora completed successfully."; else echo "Initora exited with an error (code $status)."; fi; echo; read -n 1 -s -r -p "Press any key to close..."'
-DESKTOPEOF
-    printf 'Icon=%s\n' "$icon_path"
-    cat << 'DESKTOPEOF'
+Exec=ptyxis --title="Initora - Fedora Workstation Bootstrap for Developers" -x bash -c '(initora); read -p "Press Enter to close..."'
+Icon=${icon_path}
 Terminal=false
 Categories=Utility;System;Development;
 Keywords=fedora;bootstrap;developer;setup;dev;
 StartupNotify=true
 DESKTOPEOF
-  } > "$DESKTOP_FILE"
 
   chmod +x "$desktop_file"
 
