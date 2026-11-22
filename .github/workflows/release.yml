@@ -30,23 +30,25 @@ jobs:
       - name: Create Tag and Release on GitHub
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           # If it's a documentation branch, we can skip creating the release
-          SOURCE_BRANCH="${{ github.event.pull_request.head.ref }}"
           if [[ "$SOURCE_BRANCH" =~ ^(docs|documentation)/ ]]; then
             echo "Documentation PR detected. Skipping Tag/Release creation."
             exit 0
           fi
 
-          TAG="v${{ env.NEW_VERSION }}"
+          TAG="v${NEW_VERSION}"
           
           # 1. Create custom header with PR details
           echo "## 🚀 What's New in $TAG" > release_notes.md
           echo "" >> release_notes.md
-          echo "**Source Branch:** \`${{ github.event.pull_request.head.ref }}\`" >> release_notes.md
-          echo "**PR Author:** @${{ github.event.pull_request.user.login }}" >> release_notes.md
+          echo "**Source Branch:** \`$SOURCE_BRANCH\`" >> release_notes.md
+          echo "**PR Author:** @$PR_AUTHOR" >> release_notes.md
           echo "**Original Description:**" >> release_notes.md
-          echo "> ${{ github.event.pull_request.title }}" >> release_notes.md
+          echo "> $PR_TITLE" >> release_notes.md
           echo "" >> release_notes.md
           echo "---" >> release_notes.md
           

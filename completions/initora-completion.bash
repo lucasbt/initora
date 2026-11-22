@@ -44,7 +44,7 @@ _initora_completion() {
   # Complete the value right after --module / -m
   case "$prev" in
     --module|-m)
-      COMPREPLY=($(compgen -W "$(_initora_module_ids)" -- "$cur"))
+      mapfile -t COMPREPLY < <(compgen -W "$(_initora_module_ids)" -- "$cur")
       return 0
       ;;
   esac
@@ -62,12 +62,12 @@ _initora_completion() {
   done
 
   if [[ "$subcmd" == "install" ]]; then
-    COMPREPLY=($(compgen -W "$install_opts" -- "$cur"))
+    mapfile -t COMPREPLY < <(compgen -W "$install_opts" -- "$cur")
     return 0
   fi
 
   if [[ $cword -eq 1 ]]; then
-    COMPREPLY=($(compgen -W "$top_commands" -- "$cur"))
+    mapfile -t COMPREPLY < <(compgen -W "$top_commands" -- "$cur")
     return 0
   fi
 

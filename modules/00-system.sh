@@ -17,8 +17,8 @@ module_00_system() {
   log_section "Module: System Base"
 
   _configure_dnf
-  _remove_unwanted_repos
   _add_rpmfusion
+  _remove_unwanted_repos
   _system_update
   _install_multimedia  
   _install_base_packages
@@ -50,6 +50,68 @@ _configure_firmware() {
 }
 
 # -----------------------------------------------------------------------------
+# Graphics / VA-API
+# -----------------------------------------------------------------------------
+_install_graphics() {
+  step "Configuring graphics and VA-API"
+
+  has_cmd lspci || dnf_install pciutils
+
+  local gpus
+  gpus=$(lspci -nn 2>/dev/null | grep -Ei 'VGA|3D|Display' || true)
+
+  if [[ -z "$gpus" ]]; then
+    log_warn "Could not detect GPU; skipping VA-API setup"
+    return 0
+  fi
+
+  if grep -qi 'Intel' <<< "$gpus"; then
+    log_info "Intel GPU detected — installing iHD VA-API driver"
+    dnf_install intel-media-driver libva libva-utils
+  fi
+
+  if grep -qiE 'AMD|ATI' <<< "$gpus"; then
+    log_info "AMD GPU detected — installing Mesa VA-API drivers"
+    dnf_install mesa-va-drivers mesa-vdpau-drivers
+  fi
+
+  if grep -qi 'NVIDIA' <<< "$gpus"; then
+    _install_nvidia
+  fi
+
+  ok "Graphics and VA-API configured"
+}
+
+_install_nvidia() {
+  if [[ "${INSTALL_NVIDIA_DRIVER:-true}" != "true" ]]; then
+    skip "NVIDIA driver disabled in config"
+    return 0
+  fi
+
+  step "Installing NVIDIA driver (RPM Fusion)"
+
+  # The NVIDIA driver lives in a dedicated RPM Fusion repository that used
+  # to be removed as "unwanted". Keep it enabled for hybrid graphics.
+  run_as_root dnf config-manager setopt \
+    rpmfusion-nonfree-nvidia-driver.enabled=1 2>/dev/null || true
+
+  dnf_install akmod-nvidia xorg-x11-drv-nvidia-cuda
+
+  if [[ "${INSTALL_NVIDIA_VAAPI:-true}" == "true" ]]; then
+    dnf_install nvidia-vaapi-driver || \
+      log_warn "nvidia-vaapi-driver not available — VA-API on NVIDIA will be unavailable"
+  fi
+
+  if has_cmd mokutil && mokutil --sb-state 2>/dev/null | grep -qi enabled; then
+    log_warn "Secure Boot is enabled. Enroll the akmods MOK key and reboot:"
+    log_warn "  sudo mokutil --import /etc/pki/akmods/certs/public_key.der"
+  fi
+
+  log_info "After reboot, verify with: nvidia-smi && vainfo && glxinfo -B"
+  ok "NVIDIA driver configured"
+}
+
+# -----------------------------------------------------------------------------
 _install_multimedia() {
     if [[ "${INSTALL_MULTIMEDIA:-true}" != "true" ]]; then
         skip "Multimedia install disabled in config"
@@ -57,19 +119,14 @@ _install_multimedia() {
     fi
     step "Installing multimedia support (H.264, H.265, ffmpeg, codecs)"
 
-    # -------------------------------------------------------------------------
-    # VA-API Intel — i7-4510U é Haswell (4ª geração)
-    # libva-intel-driver  → Haswell e anteriores (até 4ª gen) ← correto aqui
-    # intel-media-driver  → Broadwell em diante (5ª gen+)     ← NÃO instalar
-    # Instalar intel-media-driver no Haswell não quebra, mas VA-API não funciona
-    # -------------------------------------------------------------------------
-    dnf_install libva-intel-driver libva-utils libva
+    _install_graphics
 
     # -------------------------------------------------------------------------
     # ffmpeg completo (RPM Fusion) — substitui o ffmpeg-free do Fedora
     # --allowerasing necessário pois ffmpeg conflita intencionalmente com ffmpeg-free
     # -------------------------------------------------------------------------
-    run_as_root dnf swap -y ffmpeg-free ffmpeg --allowerasing 2>/dev/null || true
+    run_as_root dnf swap -y ffmpeg-free ffmpeg --allowerasing 2>/dev/null || \
+      run_as_root dnf install -y ffmpeg --allowerasing 2>/dev/null || true
 
     # -------------------------------------------------------------------------
     # GStreamer + codecs
@@ -130,7 +187,9 @@ _configure_dnf() {
   local max_p="${DNF_MAX_PARALLEL:-10}"
   local keepcache="${DNF_KEEPCACHE:-false}"
 
-  # Idempotent: remove existing entries then re-add
+  # Idempotent: remove existing entries then re-add.
+  # Only options supported by DNF5 are used (no deltarpm, no color=,
+  # and metadata is allowed to expire normally).
   for param in \
     "gpgcheck=False" \
     "skip_if_unavailable=True" \
@@ -139,9 +198,6 @@ _configure_dnf() {
     "max_parallel_downloads=${max_p}" \
     "fastestmirror=True" \
     "defaultyes=True" \
-    "color=always" \
-    "deltarpm=True" \
-    "metadata_expire=never" \
     "install_weak_deps=False" \
     "clean_requirements_on_remove=True" \
     "keepcache=${keepcache}"; do
@@ -195,7 +251,6 @@ _remove_unwanted_repos() {
 
   local repos=(
     "_copr:copr.fedorainfracloud.org:phracek:PyCharm.repo"
-    "rpmfusion-nonfree-nvidia-driver.repo"
     "rpmfusion-nonfree-steam.repo"
   )
 
@@ -273,8 +328,8 @@ _install_base_packages() {
   dnf_install \
       flatpak curl wget git unzip tar gzip ca-certificates gnupg \
       dnf-plugins-core lsb-release dconf-editor util-linux \
-      fontconfig fzf gnome-keyring libgnome-keyring \
-      fedora-workstation-repositories openssl
+      fontconfig fzf gnome-keyring libgnome-keyring pciutils \
+      switcheroo-control fedora-workstation-repositories openssl
 
   ok "Base packages installed."
 }
