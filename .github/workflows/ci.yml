@@ -70,9 +70,9 @@ jobs:
           cp -a "$GITHUB_WORKSPACE" /home/tester/.local/share/initora
           chown -R tester:tester /home/tester
 
-          su - tester -c '~/.local/share/initora/initora --help' > /tmp/initora-help.txt
+          su - tester -c '$HOME/.local/share/initora/initora --help' > /tmp/initora-help.txt
           grep -q -- '-ia' /tmp/initora-help.txt
-          su - tester -c '~/.local/share/initora/initora list'
+          su - tester -c '$HOME/.local/share/initora/initora list'
 
           # Comma-separated module IDs are no longer supported.
           if su - tester -c 'TERM=xterm ~/.local/share/initora/initora install -m 20,30'; then

@@ -142,7 +142,7 @@ before running.
 
 - RPM/Flatpak availability changes in Fedora repositories.
 - Vendor installer/API changes (Antigravity, OpenCode, Obsidian, Bitwarden,
-  Insomnia, Postman, DBeaver, Draw.io, Typora).
+  Insomnia, Bruno, DBeaver, Draw.io, Typora).
 - NVIDIA/Secure Boot firmware prompts.
 - GNOME/DBus behavior that depends on a real desktop session.
 - Hardware-specific VA-API results.
