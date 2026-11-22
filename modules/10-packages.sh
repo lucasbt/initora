@@ -330,6 +330,13 @@ _setup_flathub() {
 
   dnf_install flatpak
 
+  # The distro "fedora" remote duplicates packages already available as RPMs.
+  if flatpak remotes --columns=name 2>/dev/null | grep -qx "fedora"; then
+    flatpak remote-delete fedora 2>/dev/null || \
+      log_warn "Could not remove the Fedora Flatpak remote — continuing."
+    ok "Fedora Flatpak remote removed"
+  fi
+
   if ! flatpak remotes --columns=name 2>/dev/null | grep -qx "flathub"; then
     flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
     ok "Flathub remote added"

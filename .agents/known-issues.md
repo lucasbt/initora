@@ -127,6 +127,18 @@ Kept `fastestmirror=True` after confirming it is a valid DNF5 option.
 - Workflow scripts pass PR branch names through environment variables instead
   of interpolating untrusted expressions directly into shell commands.
 
+### 13. Runtime managers and prompt consolidated
+
+**Status:** resolved.
+
+- SDKMAN, NVM, rustup, manual `/usr/local/go`, and Starship were removed from
+  module 20.
+- `mise` now manages Java, Node.js, Python, Go, Rust, Maven, and Gradle.
+- Oh My Posh is the default prompt with the `pure` theme.
+- Migration `0004` removes only initora-generated activation blocks from
+  `.bashrc`; `~/.sdkman`, `~/.nvm`, `~/.cargo`, and `/usr/local/go` are left in
+  place and simply stop being activated.
+
 ## Current caveats
 
 - **No full integration test.** CI does not run modules, because they install
@@ -136,6 +148,13 @@ Kept `fastestmirror=True` after confirming it is a valid DNF5 option.
   initora prints the command but cannot complete the firmware prompt.
 - **x86_64 only.** ARM64 Fedora is not supported by the vendor downloads
   (kubectl, AWS CLI, some AppImages).
+- **Android licenses are manual.** Run `flutter doctor --android-licenses` after
+  installing Android Studio; initora does not accept licenses non-interactively.
+- **KVM groups require relogin.** Adding the user to `libvirt`/`kvm` does not
+  affect existing sessions until logout/login.
+- **Dynamic vendor pages.** Android Studio and Antigravity downloads are scraped
+  from official pages. If a vendor changes its HTML, the installer logs an
+  error instead of falling back to a pinned version.
 - **User config is not migrated.** If a user config still contains obsolete
   variables (for example `ENABLE_SSD_TRIM` or `LOCALSEARCH_DISABLE_*`), they
   are simply ignored. Remove them manually with `initora config`.

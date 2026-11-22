@@ -79,6 +79,15 @@ Nerd Fonts are downloaded only when no RPM package provides them:
 
 This avoids duplicate font families and reduces download size.
 
+### Runtimes and prompt
+
+A single `mise` installation replaces SDKMAN, NVM, rustup, and the manual Go
+archive. Java and Node.js request `lts`, so the newest LTS is resolved at
+install time instead of being pinned in the repository. Oh My Posh replaces
+Starship, and its `pure` theme is exported to `~/.config/oh-my-posh/` so shell
+startup does not fetch a remote theme. The generated `.bashrc` blocks are
+surrounded by initora markers and replaced idempotently.
+
 ## What was removed and why
 
 | Removed | Reason |
@@ -92,15 +101,20 @@ This avoids duplicate font families and reduces download size.
 | Disabling ABRT, ModemManager, GNOME Remote Desktop, `NetworkManager-wait-online`, DNF makecache | These services are useful or already well-behaved; disabling them caused confusing failures and did not produce measurable gains. |
 | Disabling GNOME animations | Modern iGPU handles animations; disabled animations hurt UX more than they help. |
 | Disabling LocalSearch | Breaks GNOME file search; indexing cost is negligible on this hardware. |
+| SDKMAN, NVM, rustup, manual `/usr/local/go` | One `mise` install manages all requested runtimes and keeps them user-owned. |
+| Starship | Oh My Posh is the supported prompt and exports a local theme config. |
 
 ## Graphics / VA-API
 
 - Intel Gen12+ (Tiger Lake, Alder Lake, Meteor Lake) uses the iHD driver:
   `intel-media-driver`, not `libva-intel-driver` (which targets Haswell and older).
 - AMD uses `mesa-va-drivers` and `mesa-vdpau-drivers`.
+- All GPUs get the common Mesa Vulkan/OpenGL renderer stack and libglvnd
+  libraries.
 - NVIDIA uses RPM Fusion:
   - `akmod-nvidia`
   - `xorg-x11-drv-nvidia-cuda`
+  - `kernel-devel` and `acpid` for akmods rebuilds
   - `nvidia-vaapi-driver` (optional)
 - The `rpmfusion-nonfree-nvidia-driver` repository must stay enabled.
 - Secure Boot requires enrolling the akmods MOK key:

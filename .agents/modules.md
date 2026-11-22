@@ -5,9 +5,9 @@ sourced by `initora`. They run in numeric order during a full installation.
 
 | Module | Purpose |
 | :--- | :--- |
-| `00-system` | DNF, repositories, multimedia, GPU drivers, base packages, directories |
+| `00-system` | DNF, repositories, multimedia, GPU/Vulkan drivers, base packages, directories |
 | `10-packages` | Vendor apps, RPM list, Flathub, Flatpak list |
-| `20-dev-tools` | Runtimes, containers, editors, cloud/AI CLIs, GUI dev tools |
+| `20-dev-tools` | mise runtimes, mobile toolchain, containers, editors, cloud/AI tools |
 | `30-desktop` | GNOME, Ptyxis, LocalSearch, Nerd Fonts, Microsoft fonts, wallpapers |
 | `40-optimizations` | sysctl and journald limits |
 
@@ -21,43 +21,55 @@ sourced by `initora`. They run in numeric order during a full installation.
 - Removes the PyCharm COPR and RPM Fusion Steam repos. It intentionally keeps
   `rpmfusion-nonfree-nvidia-driver`.
 - Adds RPM Fusion Free/Non-Free and the tainted release packages.
-- Upgrades the system and removes orphaned packages, then optionally updates
-  firmware with `fwupdmgr`.
+- Upgrades the system, removes orphaned packages, warns when a reboot is needed,
+  then optionally updates firmware with `fwupdmgr`.
+- Installs the common renderer stack (`mesa-vulkan-drivers`, `vulkan-loader`,
+  `mesa-libGLU`, libglvnd libraries) before GPU detection.
 - Detects GPUs with `lspci` and installs the matching VA-API stack:
-  - Intel → `intel-media-driver` (iHD, appropriate for Gen12+)
-  - AMD → `mesa-va-drivers`, `mesa-vdpau-drivers`
-  - NVIDIA → `akmod-nvidia`, `xorg-x11-drv-nvidia-cuda`, and optionally
-    `nvidia-vaapi-driver`; warns about MOK enrollment when Secure Boot is on.
+  - Intel Gen12+ → `intel-media-driver` (iHD)
+  - AMD RDNA 1+ → `mesa-va-drivers`, `mesa-vdpau-drivers`
+  - NVIDIA Turing+ → `akmod-nvidia`, `xorg-x11-drv-nvidia-cuda`, `kernel-devel`,
+    `acpid`, and optionally `nvidia-vaapi-driver`; warns about MOK enrollment
+    and module/reboot status.
 - Replaces `ffmpeg-free` with full `ffmpeg`, installs GStreamer/codec packages,
   and prints `vainfo` output when available.
 - Installs base packages including `pciutils` and `switcheroo-control`.
 
 ## 10-packages
 
-- Google Chrome stable from the Fedora/Google repository.
+- Google Chrome stable from the Fedora/Google repository and Firefox from the
+  Fedora RPM repository.
 - Obsidian AppImage with `.desktop` integration and x86_64 asset selection.
 - Bitwarden GUI (AppImage) and CLI (`bw`).
 - Adds the Microsoft VS Code repository.
-- Installs every package in `data/rpm-pkgs.list`.
-- Configures Flathub and installs every `remote app_id` entry in
-  `data/flatpak-pkgs.list`.
+- Installs every package in `data/rpm-pkgs.list` (including Firefox and
+  `fuse-libs`).
+- Removes the duplicate Fedora Flatpak remote, configures Flathub, and installs
+  every `remote app_id` entry in `data/flatpak-pkgs.list` (including Gearlever).
 - Refreshes the font cache.
 
 ## 20-dev-tools
 
-- **Build dependencies:** compilers and development headers.
-- **Runtimes:** SDKMAN (Java 21 + 25, Maven, Gradle), NVM (Node.js LTS and
-  global npm tools), rustup (stable), and Go.
+- **Build dependencies:** compilers and development headers, including
+  `ninja-build` and `gtk3-devel` for Flutter Linux desktop builds.
+- **Runtimes:** `mise` manages Java and Node.js (both `lts`), Python, Go, Rust,
+  Maven, and Gradle. Node setup also runs `corepack enable` and installs global
+  npm tools. The activation block in `.bashrc` is managed idempotently.
 - **Containers:** rootless Podman, `podman-compose`, `podman-docker`, Buildah,
   Skopeo, a `docker=podman` shell alias, and a user `podman.socket`. The VS
   Code `DOCKER_HOST` uses the detected UID (`/run/user/<uid>/podman/podman.socket`).
   No `fuse-overlayfs` or custom `storage.conf` is written.
-- **Editors:** VS Code settings (Java runtimes, Podman socket, terminal/font
-  preferences) and Zed. IntelliJ IDEA and Pulsar are not installed.
+- **Editors:** VS Code settings (Java home from mise, Podman socket,
+  terminal/font preferences) and Zed. IntelliJ IDEA and Pulsar are not installed.
 - **Cloud/API:** AWS CLI v2, kubectl (amd64), Bruno (latest x86_64 RPM from GitHub releases), Insomnia.
 - **GUI tools:** DBeaver, Draw.io, Typora.
-- **AI CLIs:** Antigravity CLI and OpenCode.
-- **Shell:** Starship (optional).
+- **Mobile:** KVM/libvirt (`qemu-kvm`, `virt-manager`, user groups, `libvirtd`),
+  Android Studio (latest stable archive scraped from the official page), Flutter
+  stable SDK, Android SDK `PATH` variables, and a conditional NVIDIA emulator alias.
+- **AI tools:** Antigravity CLI and OpenCode CLI, plus OpenCode Desktop and
+  Antigravity IDE/Desktop with versions resolved dynamically from official pages.
+- **Shell:** Oh My Posh with the `pure` theme exported to a local config file.
+  Starship is no longer installed.
 
 ## 30-desktop
 

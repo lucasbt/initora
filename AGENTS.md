@@ -100,6 +100,10 @@ supported.
 12. **Versioning.** Never edit `version` manually in a feature PR. The
     `Bump Version on PR` workflow bumps it based on the branch prefix.
     Documentation branches (`docs/`, `documentation/`) do not bump or release.
+13. **Language runtimes.** Use `mise` for Java, Node.js, Python, Go, and Rust.
+    Do not reintroduce SDKMAN, NVM, rustup, or manual `/usr/local/go`
+    installations. Oh My Posh is the default shell prompt; do not reintroduce
+    Starship.
 
 ## Safety checklist before committing
 

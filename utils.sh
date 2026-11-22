@@ -334,6 +334,44 @@ ensure_line() {
   grep -qxF "$line" "$file" 2>/dev/null || echo "$line" >> "$file"
 }
 
+# Replace a managed block in the target user's .bashrc.
+# Usage: set_user_bashrc_block <marker> <content> [bashrc]
+# An empty content removes the block. User-owned lines are preserved.
+set_user_bashrc_block() {
+    local marker="$1"
+    local content="${2:-}"
+    local bashrc="${3:-${SETUP_HOME:-$HOME}/.bashrc}"
+    local user="${SETUP_USER:-$USER}"
+    local tmp uid gid rc
+
+    tmp=$(mktemp) || return 1
+
+    if [[ -f "$bashrc" ]]; then
+        awk -v start="# >>> initora: ${marker}" \
+            -v end="# <<< initora: ${marker}" '
+            $0 == start { skipping = 1; next }
+            skipping && $0 == end { skipping = 0; next }
+            !skipping { print }
+        ' "$bashrc" > "$tmp" || true
+    fi
+
+    if [[ -n "$content" ]]; then
+        {
+            printf '# >>> initora: %s\n' "$marker"
+            printf '%s\n' "$content"
+            printf '# <<< initora: %s\n' "$marker"
+        } >> "$tmp"
+    fi
+
+    uid=$(id -u "$user") || { rm -f "$tmp"; return 1; }
+    gid=$(id -gn "$user") || { rm -f "$tmp"; return 1; }
+
+    run_as_root install -o "$uid" -g "$gid" -m 0644 "$tmp" "$bashrc"
+    rc=$?
+    rm -f "$tmp"
+    return "$rc"
+}
+
 # Create a timestamped backup of a file
 backup_file() {
   local file="$1"

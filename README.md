@@ -23,13 +23,14 @@
 
 - **🚀 Performance-First:** DNF parallelization (10 concurrent downloads), kernel `sysctl` tuning for development workloads, and a bounded systemd journal.
 
-- **💻 Polyglot Toolchain:** Automated management for Java (SDKMAN: 21 LTS & 25), Node.js (NVM with LTS), Rust (rustup), and Golang (latest stable).
+- **💻 Polyglot Toolchain:** One `mise` installation manages Java and Node.js
+  (latest LTS), plus Python, Go, Rust, Maven, and Gradle.
 
-- **🤖 AI-Ready:** Built-in support for Antigravity CLI and OpenCode.
+- **🤖 AI-Ready:** Built-in support for Antigravity CLI/Desktop and OpenCode CLI/Desktop.
 
 - **🎨 Visual Excellence:** Dark mode GNOME, 5 Nerd Fonts with ligatures, Microsoft fonts, custom Ptyxis terminal, and curated wallpaper collection.
 
-- **📦 App Ecosystem:** VSCode, Zed, Podman, AWS CLI, kubectl, DBeaver, Bruno, Insomnia, Obsidian, Bitwarden, Draw.io, Typora, Chrome, and more.
+- **📦 App Ecosystem:** VSCode, Zed, Podman, AWS CLI, kubectl, DBeaver, Bruno, Insomnia, Obsidian, Bitwarden, Draw.io, Typora, Chrome, Firefox, Android Studio, Flutter, KVM/virt-manager, and more.
 
 - **🖥️ Hybrid Graphics:** Detects Intel, AMD, and NVIDIA GPUs; installs the correct VA-API drivers and the NVIDIA driver from RPM Fusion on hybrid laptops.
 
@@ -174,13 +175,14 @@ Initora is built on a series of specialized scripts located in the `modules/` di
   - **Video codecs:** H.264, H.265, OpenH264 (for Firefox)
   - **Audio codecs:** FLAC, FAAC, AAC, MP3 (LAME)
   - **Hardware acceleration:** Detects the installed GPU and installs the matching VA-API driver:
-    - Intel (Broadwell/Gen12+) → `intel-media-driver` (iHD)
-    - AMD → `mesa-va-drivers` + `mesa-vdpau-drivers`
-    - NVIDIA → `akmod-nvidia`, `xorg-x11-drv-nvidia-cuda`, and `nvidia-vaapi-driver`
+    - Intel Gen12+ → `intel-media-driver` (iHD)
+    - AMD RDNA 1+ → `mesa-va-drivers` + `mesa-vdpau-drivers`
+    - NVIDIA Turing+ → `akmod-nvidia`, `xorg-x11-drv-nvidia-cuda`, `kernel-devel`, and `nvidia-vaapi-driver`
+  - **Renderers:** Mesa Vulkan, `vulkan-loader`, `mesa-libGLU`, and libglvnd libraries
   - **Tools:** VLC, FFmpeg (full version from RPM Fusion), GStreamer plugins (base, good, bad, ugly)
-- **System Update:** Performs full `dnf upgrade`, removes orphaned packages, and optionally updates firmware (via `fwupdmgr`).
+- **System Update:** Performs full `dnf upgrade`, removes orphaned packages, warns when a reboot is needed, and optionally updates firmware (via `fwupdmgr`).
 - **Base Packages:** Installs essentials: Git, curl, wget, GnuPG, Flatpak, fontconfig, FZF, GNOME Keyring, PCI utilities, `switcheroo-control`, and OpenSSL.
-- **Directory Setup:** Creates project-specific directories (`~/.local/share/initora`, `~/.config/initora`, `~/.cache/initora`).
+- **Directory Setup:** Creates project-specific directories (`~/.local/share/initora`, `~/.config/initora`, `~/.cache/initora`, `~/.local/bin`, `~/.local/opt`).
 
 > **Secure Boot + NVIDIA:** when Secure Boot is enabled, enroll the akmods MOK key (`sudo mokutil --import /etc/pki/akmods/certs/public_key.der`) and reboot before the NVIDIA driver can load.
 
@@ -191,14 +193,15 @@ Initora is built on a series of specialized scripts located in the `modules/` di
 
 **What it does:**
 - **Google Chrome:** Installs Chrome stable from the official Google repository for automatic updates.
+- **Firefox:** Installed as the native RPM from the Fedora repositories.
 - **Obsidian:** Downloads the latest AppImage from GitHub, creates a system launcher (`.desktop` entry), and adds to GNOME applications menu.
 - **Bitwarden:** Installs both:
   - **GUI** (AppImage) — Full-featured password manager with system integration
   - **CLI** (`bw`) — Command-line tool for scripting and automation
 - **VSCode:** Adds the official Microsoft repository and installs VSCode for system-wide updates.
 - **Bulk RPM Installation:** Reads `data/rpm-pkgs.list` and installs all packages in batch (20+ categories including development, productivity, graphics, office).
-- **Flathub Setup:** Configures Flatpak and the Flathub remote for sandboxed applications.
-- **Bulk Flatpak Installation:** Reads `data/flatpak-pkgs.list` and installs Flatpak apps (messaging, media, utilities, GNOME extensions).
+- **Flathub Setup:** Configures Flatpak, removes the duplicate Fedora Flatpak remote, and adds Flathub for sandboxed applications.
+- **Bulk Flatpak Installation:** Reads `data/flatpak-pkgs.list` and installs Flatpak apps (messaging, media, utilities, GNOME extensions, Gearlever).
 - **Font Cache Update:** Refreshes the system font cache after installation.
 
 ---
@@ -209,14 +212,16 @@ Initora is built on a series of specialized scripts located in the `modules/` di
 **What it does:**
 
 **Runtimes & Language Managers:**
-- **SDKMAN:** Installs Java LTS (21) and Java Latest (25), Maven, Gradle, and configures auto-accept for prompts.
-- **NVM (Node.js):** Installs Node.js LTS with npm and global packages (typescript, ts-node, prettier, eslint).
-- **Rust:** Installs via `rustup` with stable toolchain, Cargo, and automatic PATH setup.
-- **Golang:** Downloads the latest stable Go release, installs to `/usr/local/go`, and configures `GOPATH`.
+- **mise:** Single version manager for Java and Node.js (latest LTS, resolved dynamically),
+  Python, Go, Rust, Maven, and Gradle. Activation is added idempotently to `.bashrc`.
+- **Node tooling:** `corepack enable` plus global `npm`, `typescript`, `ts-node`,
+  `prettier`, and `eslint`.
 
 **AI & Developer Tools:**
 - **Antigravity CLI:** Google's AI tool (successor to Gemini CLI) with automatic installer.
-- **OpenCode:** Binary Go-based AI tool for code generation and analysis.
+- **Antigravity IDE/Desktop:** Latest Linux x64 tarballs discovered dynamically from the official download page.
+- **OpenCode CLI:** AI tool for code generation and analysis.
+- **OpenCode Desktop:** Latest x86_64 RPM resolved dynamically through the official redirect.
 
 **Container & Cloud Infrastructure:**
 - **Podman:** Rootless configuration with a user socket for IDE integration, Docker aliases, and native overlay storage (no `fuse-overlayfs`).
@@ -230,13 +235,19 @@ Initora is built on a series of specialized scripts located in the `modules/` di
 - **Draw.io:** Diagramming tool (AppImage).
 - **Typora:** Markdown editor with real-time preview (AppImage).
 
+**Mobile Development:**
+- **KVM/libvirt:** `qemu-kvm`, `libvirt`, `virt-manager`, group setup, and `libvirtd`.
+- **Android Studio:** Latest stable Linux x64 archive from the official download page plus SDK environment variables.
+- **Flutter:** Stable SDK clone with PATH setup; Android licenses are accepted manually with `flutter doctor --android-licenses`.
+- **NVIDIA emulator alias:** Added only when an NVIDIA GPU is detected.
+
 **Terminals & Shells:**
-- **Starship:** Ultra-fast cross-shell prompt with a minimalist, low-latency configuration optimized for developers.
+- **Oh My Posh:** Default prompt with the `pure` theme exported to a local config file.
 
 **Editors:**
 - **Visual Studio Code:** Deep configuration including:
   - Custom `settings.json` for performance tuning (minimap disabled, fontLigatures enabled)
-  - Java runtime configuration (supports both Java 21 and 25 via SDKMAN)
+  - Java home detected from mise (`java.jdt.ls.java.home`)
   - Terminal integration with Ptyxis and a dynamically resolved Podman socket (`DOCKER_HOST`)
 - **Zed:** Modern code editor (install via official script).
 
