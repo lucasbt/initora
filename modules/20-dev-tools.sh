@@ -3,13 +3,14 @@
 # modules/20-dev-tools.sh -- Development Environments and Toolchains
 #
 # Tasks:
-#   - Runtime Managers: SDKMAN (Java LTS), Rust, Golang and NVM (Node.js).
-#   - AI Tools: Antigravity CLI and OpenCode.
+#   - Runtimes: mise for Java, Node.js, Python, Go, Rust, Maven, and Gradle.
+#   - AI Tools: Antigravity CLI/Desktop, OpenCode CLI/Desktop.
 #   - Containers: Podman configuration, Docker alias, and Podman Desktop.
 #   - Cloud/Infra: AWS CLI v2, kubectl, and REST clients (Bruno, Insomnia).
 #   - Database/Docs: DBeaver Community, Draw.io, and Typora.
+#   - Mobile: KVM, Android Studio, Flutter, and Android SDK environment.
 #   - Editor Configuration: VSCode settings and toolchain integration.
-#   - Shell: Starship prompt installation and customized configuration.
+#   - Shell: Oh My Posh with the "pure" theme.
 # =============================================================================
 
 MODULE_NAME="20-dev-tools"
@@ -17,52 +18,56 @@ MODULE_NAME="20-dev-tools"
 module_20_dev_tools() {
   log_section "Module: Development Tools"
 
-  # ── 1. Build dependencies (compilação de runtimes a partir do fonte)
-  log_info "Installing build dependencies for runtimes..."
+  # ── 1. Build dependencies
+  log_info "Installing build dependencies..."
   dnf_install \
-    gcc gcc-c++ make \
+    gcc gcc-c++ make clang cmake ninja-build \
     openssl-devel bzip2-devel libffi-devel zlib-devel \
     sqlite-devel readline-devel \
     xz-devel tk-devel \
-    libuuid-devel
+    libuuid-devel \
+    gtk3-devel
 
-  # ── 2. Controle de versão (outros passos podem clonar repositórios)
+  # ── 2. Version control (other steps may clone repositories)
   _install_git
 
-  # ── 3. Gerenciadores de runtime (devem existir antes de instalar qualquer runtime)
-  _install_sdkman
+  # ── 3. Runtimes (mise replaces SDKMAN, NVM, rustup, and manual Go)
+  _install_mise
+  _install_mise_runtimes
 
-  # ── 4. Runtimes
-  _install_sdkman_runtimes   # Java 21 LTS + Java 25, Maven, Gradle
-  _install_nvm               # Node.js LTS + pacotes npm globais
-  _install_rust
-  _install_golang
-
-  # ── 5. Infraestrutura de containers (IDEs podem se conectar ao socket Docker)
+  # ── 4. Container infrastructure
   _configure_podman
   _install_podman_desktop
 
-  # ── 6. Editores (VS Code, Zed)
+  # ── 5. Editors
   _install_editors
 
-  # ── 7. Ferramentas CLI de infraestrutura
+  # ── 6. Infrastructure CLIs
   _install_kubectl
   _install_awscli
 
-  # ── 8. Clientes de API REST
+  # ── 7. REST clients
   _install_insomnia
   _install_bruno
 
-  # ── 9. Utilitários GUI (sem interdependências entre si)
-  _install_dbeaver  # banco de dados
-  _install_drawio   # diagramas
-  _install_typora   # editor Markdown
+  # ── 8. GUI utilities
+  _install_dbeaver
+  _install_drawio
+  _install_typora
 
-  # ── 10. Shell prompt (cosmético; não bloqueia nenhum outro passo)
-  _install_starship
+  # ── 9. Mobile development
+  _configure_kvm
+  _install_android_studio
+  _configure_android_env
+  _install_flutter
 
-  # ── 11. AI CLI Tools
+  # ── 10. Shell prompt
+  _install_oh_my_posh
+
+  # ── 11. AI tools
   _install_ai_cli_tools
+  _install_opencode_desktop
+  _install_antigravity_apps
 
   log_success "Module $MODULE_NAME completed."
 }
@@ -80,459 +85,108 @@ _install_git() {
 
 
 # =============================================================================
-# 3. Gerenciadores de runtime
+# 3. Runtimes — mise
 # =============================================================================
 
-_install_sdkman() {
-  step "Installing SDKMAN (SDK version manager)"
+_install_mise() {
+  if [[ "${INSTALL_MISE:-true}" != "true" ]]; then
+    skip "mise disabled in config"
+    return
+  fi
+
+  step "Installing mise (unified version manager)"
 
   local user="${SETUP_USER:-$USER}"
   local user_home="${SETUP_HOME:-$HOME}"
-  local sdkman_dir="${user_home}/.sdkman"
-  local sdkman_init="${sdkman_dir}/bin/sdkman-init.sh"
+  local mise_bin="${user_home}/.local/bin/mise"
 
-  if [[ -d "$sdkman_dir" ]]; then
-    skip "SDKMAN already installed at $sdkman_dir"
+  if [[ -x "$mise_bin" ]]; then
+    skip "mise already installed: $("$mise_bin" --version 2>/dev/null | head -n1)"
   else
-    log_info "Downloading and installing SDKMAN..."
-    sudo -u "$user" bash -c 'curl -s "https://get.sdkman.io" | bash' || {
-      log_error "Failed to install SDKMAN via curl"
-      return 1
-    }
-    ok "SDKMAN installed"
-  fi
-
-  CONFIG_FILE="$sdkman_dir/etc/config"
-
-  if [ ! -f "$CONFIG_FILE" ]; then
-    echo "SDKMAN config file not found: $CONFIG_FILE"
-  else
-    # Altera sdkman_auto_answer=false para sdkman_auto_answer=true
-    sed -i.bak 's/^sdkman_auto_answer=false$/sdkman_auto_answer=true/' "$CONFIG_FILE"
-    log_success "SDKMAN Config updated."
-  fi
-  
-  _ensure_sdkman_bashrc "$user" "$user_home"
-}
-
-_ensure_sdkman_bashrc() {
-  local user="$1"
-  local user_home="$2"
-  local bashrc="${user_home}/.bashrc"
-  local sdkman_init="${user_home}/.sdkman/bin/sdkman-init.sh"
-
-  if ! grep -qF 'sdkman-init.sh' "$bashrc" 2>/dev/null; then
-    sudo -u "$user" bash -c "cat >> \"$bashrc\"" << EOF
-
-# SDKMAN -- SDK version manager
-export SDKMAN_DIR="${user_home}/.sdkman"
-[[ -s "${sdkman_init}" ]] && source "${sdkman_init}"
-EOF
-    log_info "SDKMAN activation added to .bashrc"
-  else
-    skip "SDKMAN already present in .bashrc"
-  fi
-}
-
-
-# =============================================================================
-# 4. Runtimes
-# =============================================================================
-
-# ── Helpers internos do SDKMAN ────────────────────────────────────────────────
-
-_sdk_latest_java() {
-  local major="$1"
-  local dist="$2"
-  local user="${SETUP_USER:-$USER}"
-  local user_home="${SETUP_HOME:-$HOME}"
-  local sdkman_init="${user_home}/.sdkman/bin/sdkman-init.sh"
-
-  sudo -u "$user" bash -c "
-    source \"${sdkman_init}\" 2>/dev/null
-
-    sdk list java 2>/dev/null \
-      | awk -F'|' '{gsub(/[[:space:]]/, \"\", \$NF); print \$NF}' \
-      | grep -E '^${major}\..*-${dist}$' \
-      | grep -v '^$' \
-      | sort -V \
-      | tail -1
-  "
-}
-
-_sdk_install_java() {
-  local user="$1"
-  local user_home="$2"
-  local java_id="$3"
-  local major="$4"
-  local sdkman_init="${user_home}/.sdkman/bin/sdkman-init.sh"
-
-  if sudo -u "$user" bash -c "ls \"${user_home}/.sdkman/candidates/java/\" 2>/dev/null" \
-      | grep -qx "$java_id"; then
-    skip "Java ${major} already installed: $java_id"
-  else
-    log_info "Installing Java ${major}: $java_id"
-    sudo -u "$user" bash -c "
-      source \"${sdkman_init}\" 2>/dev/null
-      export SDKMAN_NON_INTERACTIVE=true
-      sdk install java \"${java_id}\" -y
-    " || {
-      log_error "Failed to install Java ${major}: $java_id"
-      return 1
-    }
-    ok "Java ${major} installed: $java_id"
-  fi
-}
-
-# ── Instalação dos runtimes via SDKMAN ────────────────────────────────────────
-_get_java_version() {
-  local candidate="$1"
-  local user="${SETUP_USER:-$USER}"
-  local user_home="${SETUP_HOME:-$HOME}"
-
-  sudo -u "$user" bash -c "
-    java_bin=\"${user_home}/.sdkman/candidates/java/${candidate}/bin/java\"
-
-    if [[ -x \"\$java_bin\" ]]; then
-      \"\$java_bin\" -version 2>&1 | head -n1
-    else
-      echo \"not installed\"
-    fi
-  "
-}
-
-_install_sdkman_runtimes() {
-  step "Installing runtimes via SDKMAN (may take a while on first run)"
-
-  local user="${SETUP_USER:-$USER}"
-  local user_home="${SETUP_HOME:-$HOME}"
-  local sdkman_init="${user_home}/.sdkman/bin/sdkman-init.sh"
-
-  if [[ ! -s "$sdkman_init" ]]; then
-    log_error "SDKMAN not found at $sdkman_init. Skipping runtime installation."
-    return 1
-  fi
-
-  # ── Java 21 LTS
-  log_info "Detecting latest Java 21 Temurin..."
-  local java21_id
-  java21_id=$(_sdk_latest_java "21" "tem")
-
-  if [[ -n "$java21_id" ]]; then
-    _sdk_install_java "$user" "$user_home" "$java21_id" "21"
-    sudo -u "$user" bash -c "
-      source \"${sdkman_init}\" 2>/dev/null
-      sdk default java \"${java21_id}\"
-    "
-    log_info "Java 21 set as default: $java21_id"
-  else
-    log_warn "Java 21 Temurin not detected automatically."
-    log_warn "Check manually: sdk list java | grep '21.*tem'"
-    java21_id="21-tem"
-  fi
-
-  # ── Java 25
-  log_info "Detecting latest Java 25 Temurin..."
-  local java25_id
-  java25_id=$(_sdk_latest_java "25" "tem")
-
-  if [[ -n "$java25_id" ]]; then
-    _sdk_install_java "$user" "$user_home" "$java25_id" "25"
-    sudo -u "$user" bash -c "
-      source \"${sdkman_init}\" 2>/dev/null
-      sdk default java \"${java25_id}\"
-    "
-    log_info "Java 25 set as default: $java25_id"
-
-  else
-    log_warn "Java 25 Temurin not detected automatically."
-    log_warn "Check manually: sdk list java | grep '25.*tem'"
-    java25_id="25-tem"
-  fi
-
-  # ── Maven e Gradle
-  log_info "Installing Maven and Gradle via SDKMAN..."
-  sudo -u "$user" bash -c "
-    source \"${sdkman_init}\" 2>/dev/null
-    sdk install maven  2>/dev/null || true
-    sdk install gradle 2>/dev/null || true
-  "
-
-  java21_status=$(_get_java_version "$java21_id")
-  java25_status=$(_get_java_version "$java25_id")
-
-  ok "SDKMAN runtimes installed — Java 21: ${java21_status} | Java 25: ${java25_status}"
-}
-
-
-# ── NVM + Node.js LTS ─────────────────────────────────────────────────────────
-
-_install_nvm() {
-  local user="${SETUP_USER:-$USER}"
-  local user_home="${SETUP_HOME:-$HOME}"
-  local nvm_dir="${user_home}/.nvm"
-  local bashrc="${user_home}/.bashrc"
-
-  step "Installing NVM (latest)"
-
-  log_info "Querying latest NVM release from GitHub..."
-  local nvm_ver
-  nvm_ver=$(curl -fsSL https://api.github.com/repos/nvm-sh/nvm/releases/latest \
-    | grep -oP '"tag_name":\s*"\K([^"]+)')
-
-  if [[ -z "$nvm_ver" ]]; then
-    log_error "Unable to identify the latest NVM version on GitHub"
-    return 1
-  fi
-  log_info "Latest NVM release: ${nvm_ver}"
-
-  if [[ ! -d "$nvm_dir" ]]; then
-    log_info "Downloading and installing NVM ${nvm_ver}..."
-    sudo -u "$user" bash -c \
-      "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/${nvm_ver}/install.sh | bash" || {
-        log_error "Failed to install NVM"
+    sudo -u "$user" mkdir -p "$(dirname "$mise_bin")"
+    sudo -u "$user" env HOME="$user_home" MISE_INSTALL_PATH="$mise_bin" \
+      bash -c 'curl -fsSL https://mise.run | sh' || {
+        log_error "Failed to install mise"
         return 1
       }
-    ok "NVM ${nvm_ver} installed"
-  else
-    skip "NVM already installed at ${nvm_dir}"
+
+    [[ -x "$mise_bin" ]] || {
+      log_error "mise binary not found at $mise_bin after installation"
+      return 1
+    }
+    ok "mise installed at $mise_bin"
   fi
 
-  # Garante que o bloco de inicialização esteja no .bashrc
-  if ! grep -qF 'NVM_DIR' "$bashrc" 2>/dev/null; then
-    sudo -u "$user" bash -c "cat >> \"$bashrc\"" << EOF
+  local activation="eval \"\$(${mise_bin} activate bash)\""
+  set_user_bashrc_block "mise" "$activation"
+  ok "mise activation configured in .bashrc"
+}
 
-# NVM -- Node Version Manager
-export NVM_DIR="${nvm_dir}"
-[[ -s "\$NVM_DIR/nvm.sh" ]] && source "\$NVM_DIR/nvm.sh"
-[[ -s "\$NVM_DIR/bash_completion" ]] && source "\$NVM_DIR/bash_completion"
-EOF
-    log_info "NVM activation added to .bashrc"
-  else
-    skip "NVM already present in .bashrc"
+_install_mise_runtimes() {
+  if [[ "${INSTALL_MISE:-true}" != "true" ]]; then
+    skip "mise runtimes disabled in config"
+    return
   fi
 
-  # Instala/usa Node.js LTS e pacotes globais dentro do contexto do usuário
-  log_info "Installing Node.js LTS via NVM..."
-  sudo -u "$user" bash -c "
-    export NVM_DIR=\"${nvm_dir}\"
-    [[ -s \"\$NVM_DIR/nvm.sh\" ]] && source \"\$NVM_DIR/nvm.sh\"
-    nvm install --lts 2>/dev/null || true
-    nvm use     --lts 2>/dev/null || true
-    nvm alias default 'lts/*'    2>/dev/null || true
-  " || {
-    log_error "Failed to install Node.js LTS"
+  step "Installing runtimes with mise (may take a while on first run)"
+
+  local user="${SETUP_USER:-$USER}"
+  local user_home="${SETUP_HOME:-$HOME}"
+  local mise_bin="${user_home}/.local/bin/mise"
+
+  if [[ ! -x "$mise_bin" ]]; then
+    log_error "mise not found at $mise_bin; run _install_mise first"
     return 1
-  }
+  fi
+
+  local java_version node_version python_version go_version rust_version
+  java_version="${MISE_JAVA_VERSION:-lts}"
+  node_version="${MISE_NODE_VERSION:-lts}"
+  python_version="${MISE_PYTHON_VERSION:-latest}"
+  go_version="${MISE_GO_VERSION:-latest}"
+  rust_version="${MISE_RUST_VERSION:-latest}"
+
+  log_info "Java:   ${java_version}"
+  log_info "Node:   ${node_version}"
+  log_info "Python: ${python_version}"
+  log_info "Go:     ${go_version}"
+  log_info "Rust:   ${rust_version}"
+
+  sudo -u "$user" env HOME="$user_home" "$mise_bin" use --global \
+    "java@${java_version}" \
+    "node@${node_version}" \
+    "python@${python_version}" \
+    "go@${go_version}" \
+    "rust@${rust_version}" || {
+      log_error "Failed to install runtimes with mise"
+      return 1
+    }
+
+  sudo -u "$user" env HOME="$user_home" "$mise_bin" use --global \
+    maven@latest gradle@latest || \
+    log_warn "Maven/Gradle could not be installed with mise — continuing."
+
+  sudo -u "$user" env HOME="$user_home" "$mise_bin" exec -- \
+    corepack enable || log_warn "corepack enable failed — continuing."
 
   log_info "Installing global npm packages..."
+  sudo -u "$user" env HOME="$user_home" "$mise_bin" exec -- \
+    npm install -g npm@latest typescript ts-node prettier eslint || \
+    log_warn "Some npm packages failed to install — continuing."
 
-  sudo -u "$user" bash -c "
-    export NVM_DIR=\"${nvm_dir}\"
-    [[ -s \"\$NVM_DIR/nvm.sh\" ]] && source \"\$NVM_DIR/nvm.sh\"
+  sudo -u "$user" env HOME="$user_home" "$mise_bin" exec -- sh -c '
+    echo "Java:   $(java -version 2>&1 | head -n1)"
+    echo "Node:   $(node --version 2>/dev/null || echo not-found)"
+    echo "Python: $(python3 --version 2>/dev/null || echo not-found)"
+    echo "Go:     $(go version 2>/dev/null || echo not-found)"
+    echo "Rust:   $(rustc --version 2>/dev/null || echo not-found)"
+  ' || true
 
-    echo \"Node version: \$(node -v 2>/dev/null || echo 'not found')\"
-    echo \"npm version: \$(npm -v 2>/dev/null || echo 'not found')\"
-
-    npm install -g npm@latest typescript ts-node prettier eslint --loglevel=info
-  " || log_warn "Some npm packages failed to install — continuing."
-
-  ok "Node.js LTS and NVM installed"
-}
-
-# ── Go (Golang) ──────────────────────────────────────────────────────────────
-
-_install_golang() {
-  local user="${SETUP_USER:-$USER}"
-  local user_home="${SETUP_HOME:-$HOME}"
-  local bashrc="${user_home}/.bashrc"
-
-  step "Installing Golang (latest)"
-
-  log_info "Querying latest Go release..."
-
-  local latest_go_ver
-  latest_go_ver=$(curl -fsSL https://go.dev/VERSION?m=text | head -n1)
-
-  if [[ -z "$latest_go_ver" ]]; then
-    log_error "Unable to identify latest Go version"
-    return 1
-  fi
-
-  log_info "Latest Go release: ${latest_go_ver}"
-
-  # Versão instalada
-  local installed_go_ver=""
-  if [[ -x /usr/local/go/bin/go ]]; then
-    installed_go_ver=$(
-      /usr/local/go/bin/go version 2>/dev/null \
-        | awk '{print $3}'
-    )
-  fi
-
-  if [[ "$installed_go_ver" == "$latest_go_ver" ]]; then
-    skip "Golang already up to date (${installed_go_ver})"
-  else
-    [[ -n "$installed_go_ver" ]] \
-      && log_info "Updating Golang ${installed_go_ver} → ${latest_go_ver}" \
-      || log_info "Installing Golang ${latest_go_ver}"
-
-    local arch
-    case "$(uname -m)" in
-      x86_64) arch="amd64" ;;
-      aarch64|arm64) arch="arm64" ;;
-      *)
-        log_error "Unsupported architecture: $(uname -m)"
-        return 1
-        ;;
-    esac
-
-    local go_tar="/tmp/${latest_go_ver}.linux-${arch}.tar.gz"
-    local go_url="https://go.dev/dl/${latest_go_ver}.linux-${arch}.tar.gz"
-
-    log_info "Downloading ${latest_go_ver}..."
-    curl -fsSL "$go_url" -o "$go_tar" || {
-      log_error "Failed to download Go"
-      return 1
-    }
-
-    log_info "Installing Go..."
-    sudo rm -rf /usr/local/go
-
-    sudo tar -C /usr/local -xzf "$go_tar" || {
-      log_error "Failed to extract Go archive"
-      return 1
-    }
-
-    rm -f "$go_tar"
-
-    ok "Golang ${latest_go_ver} installed"
-  fi
-
-  # PATH + GOPATH
-  if ! grep -qF '/usr/local/go/bin' "$bashrc" 2>/dev/null; then
-    sudo -u "$user" bash -c "cat >> \"$bashrc\"" << 'EOF'
-
-# Golang
-export GOPATH="$HOME/go"
-export PATH="/usr/local/go/bin:$GOPATH/bin:$PATH"
-EOF
-    log_info "Go environment added to .bashrc"
-  else
-    skip "Go already configured in .bashrc"
-  fi
-
-  # GOPATH
-  sudo -u "$user" mkdir -p "${user_home}/go"/{bin,pkg,src}
-
-  # Verificação
-  local final_go_ver
-  final_go_ver=$(
-    /usr/local/go/bin/go version 2>/dev/null \
-      | awk '{print $3}'
-  )
-
-  if [[ -z "$final_go_ver" ]]; then
-    log_error "Go installation verification failed"
-    return 1
-  fi
-
-  log_info "Installed Go version: ${final_go_ver}"
-
-  ok "Golang ready"
-}
-
-
-# ── Rust + Cargo ─────────────────────────────────────────────────────────────
-
-_install_rust() {
-  local user="${SETUP_USER:-$USER}"
-  local user_home="${SETUP_HOME:-$HOME}"
-  local rust_dir="${user_home}/.cargo"
-  local bashrc="${user_home}/.bashrc"
-
-  step "Installing Rust (latest stable)"
-
-  # Instala rustup se necessário
-  if [[ ! -d "$rust_dir" ]]; then
-    log_info "Installing Rust toolchain..."
-
-    sudo -u "$user" bash -c \
-      "curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile default" || {
-        log_error "Failed to install Rust"
-        return 1
-      }
-
-    ok "Rust installed"
-  fi
-
-  # PATH
-  if ! grep -qF '.cargo/env' "$bashrc" 2>/dev/null; then
-    sudo -u "$user" bash -c "cat >> \"$bashrc\"" << 'EOF'
-
-# Rust / Cargo
-[[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
-EOF
-    log_info "Rust environment added to .bashrc"
-  else
-    skip "Rust already configured in .bashrc"
-  fi
-
-  # Versão instalada
-  local installed_rust_ver=""
-  installed_rust_ver=$(
-    sudo -u "$user" bash -c '
-      [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
-      rustc --version 2>/dev/null | awk "{print \$2}"
-    '
-  )
-
-  log_info "Checking for Rust updates..."
-
-  sudo -u "$user" bash -c '
-    [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
-    rustup update stable
-  ' || {
-    log_error "Failed to update Rust"
-    return 1
-  }
-
-  local final_rust_ver
-  final_rust_ver=$(
-    sudo -u "$user" bash -c '
-      [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
-      rustc --version 2>/dev/null | awk "{print \$2}"
-    '
-  )
-
-  if [[ "$installed_rust_ver" == "$final_rust_ver" ]]; then
-    skip "Rust already up to date (${final_rust_ver})"
-  else
-    ok "Rust updated ${installed_rust_ver:-none} → ${final_rust_ver}"
-  fi
-
-  # Cargo version
-  local cargo_ver
-  cargo_ver=$(
-    sudo -u "$user" bash -c '
-      [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
-      cargo --version 2>/dev/null | awk "{print \$2}"
-    '
-  )
-
-  if [[ -z "$final_rust_ver" || -z "$cargo_ver" ]]; then
-    log_error "Rust verification failed"
-    return 1
-  fi
-
-  log_info "Rust version : ${final_rust_ver}"
-  log_info "Cargo version: ${cargo_ver}"
-
-  ok "Rust toolchain ready"
+  ok "mise runtimes installed"
 }
 
 # =============================================================================
-# AI CLI Tools (Antigravity CLI + OpenCode)
+# 4. AI CLI tools
 # =============================================================================
  
 # Agregador — ponto único de entrada para os dois instaladores
@@ -890,36 +544,28 @@ _configure_vscode() {
   local user_uid
   user_uid=$(id -u "$user")
   local settings_dir="${user_home}/.config/Code/User"
-  local sdkman_candidates="${user_home}/.sdkman/candidates/java"
- 
+  local mise_bin="${user_home}/.local/bin/mise"
+  local java_home=""
+
   step "Configuring VS Code (extensions + settings)"
- 
-  # ── Dependência: VS Code precisa estar instalável via 'code'
+
+  # ── Dependency: VS Code must be callable as 'code'
   if ! command -v code &>/dev/null; then
     log_warn "VS Code ('code') not found in PATH — skipping configuration"
     return
   fi
- 
-  # ── Detectar IDs das instalações Java gerenciadas pelo SDKMAN
-  local java21_id java25_id java21_path java25_path
-  java21_id=$(find "$sdkman_candidates" -mindepth 1 -maxdepth 1 -type d -name '21.*' -printf '%f\n' 2>/dev/null | sort -V | tail -1)
-  java25_id=$(find "$sdkman_candidates" -mindepth 1 -maxdepth 1 -type d -name '25.*' -printf '%f\n' 2>/dev/null | sort -V | tail -1)
- 
-  if [[ -z "$java21_id" ]]; then
-    log_warn "Java 21 not found in SDKMAN candidates — java.configuration.runtimes may be incomplete"
-    java21_id="21-tem"  # fallback para evitar JSON inválido
+
+  # ── Detect the active Java home managed by mise
+  if [[ -x "$mise_bin" ]]; then
+    local java_bin
+    java_bin=$(sudo -u "$user" env HOME="$user_home" "$mise_bin" which java 2>/dev/null || true)
+    if [[ -n "$java_bin" ]]; then
+      java_home=$(dirname "$(dirname "$java_bin")")
+      log_info "Java home: ${java_home}"
+    fi
   fi
-  if [[ -z "$java25_id" ]]; then
-    log_warn "Java 25 not found in SDKMAN candidates — java.configuration.runtimes may be incomplete"
-    java25_id="25-tem"
-  fi
- 
-  java21_path="${sdkman_candidates}/${java21_id}"
-  java25_path="${sdkman_candidates}/${java25_id}"
-  log_info "Java 21 path: ${java21_path}"
-  log_info "Java 25 path: ${java25_path}"
- 
-  # ── settings.json (variáveis de Java expandidas aqui, por isso sem aspas no delimitador)
+
+  # ── settings.json (variables are expanded here, hence the unquoted delimiter)
   sudo -u "$user" mkdir -p "$settings_dir"
   sudo -u "$user" tee "${settings_dir}/settings.json" > /dev/null << VSCODE_SETTINGS
 {
@@ -966,18 +612,8 @@ _configure_vscode() {
   "terminal.integrated.scrollback": 10000,
   "terminal.integrated.enableBell": false,
   
-  "java.configuration.runtimes": [
-    {
-      "name": "JavaSE-21",
-      "path": "${java21_path}",
-      "default": true
-    },
-    {
-      "name": "JavaSE-25",
-      "path": "${java25_path}"
-    }
-  ],
-  "java.jdt.ls.java.home": "${java21_path}",
+  "java.jdt.ls.java.home": "${java_home}",
+  "java.configuration.updateBuildConfiguration": "automatic",
   "java.compile.nullAnalysis.mode": "automatic",
   "java.saveActions.organizeImports": true,
   "java.cleanup.actionsOnSave": [
@@ -1010,7 +646,7 @@ _configure_vscode() {
 }
 VSCODE_SETTINGS
  
-  ok "VS Code configured — Java 21: ${java21_id} · Java 25: ${java25_id}"
+  ok "VS Code configured — Java home: ${java_home:-mise activation}"
 }
 
 # =============================================================================
@@ -1207,7 +843,7 @@ _install_bruno() {
 
 
 # =============================================================================
-# 9. Utilitários GUI
+# 8. Utilitários GUI
 # =============================================================================
 
 _install_dbeaver() {
@@ -1363,142 +999,426 @@ EOF
 
 
 # =============================================================================
-# 10. Shell prompt
+# 9. Mobile development
 # =============================================================================
 
-_install_starship() {
-  if [[ "${INSTALL_STARSHIP:-true}" != "true" ]]; then
-    skip "Starship disabled in config"
+_configure_kvm() {
+  if [[ "${INSTALL_KVM:-true}" != "true" ]]; then
+    skip "KVM setup disabled in config"
     return
   fi
 
-  step "Installing Starship (modern shell prompt)"
+  step "Configuring KVM/libvirt"
+
+  dnf_install qemu-kvm libvirt libvirt-daemon-kvm libvirt-client virt-manager
+
+  local user="${SETUP_USER:-$USER}"
+
+  if id -nG "$user" | grep -qw libvirt && id -nG "$user" | grep -qw kvm; then
+    skip "User $user already belongs to libvirt and kvm"
+  else
+    run_as_root usermod -aG libvirt,kvm "$user" || {
+      log_error "Failed to add $user to libvirt/kvm groups"
+      return 1
+    }
+    log_warn "Log out and back in for the new libvirt/kvm groups to take effect."
+  fi
+
+  if ! run_as_root systemctl is-active --quiet libvirtd; then
+    run_as_root systemctl enable --now libvirtd 2>/dev/null || \
+      log_warn "Could not enable libvirtd; it may be socket-activated on this release."
+  fi
+
+  ok "KVM/libvirt configured"
+}
+
+_install_android_studio() {
+  if [[ "${INSTALL_ANDROID_STUDIO:-true}" != "true" ]]; then
+    skip "Android Studio install disabled in config"
+    return
+  fi
+
+  step "Installing Android Studio (latest stable)"
+
+  local page archive_url version
+  if ! page=$(curl -fsSL --max-time 30 https://developer.android.com/studio); then
+    log_error "Could not fetch the Android Studio download page"
+    return 1
+  fi
+
+  archive_url=$(grep -oE 'https://[^" ]+/android-studio-[^" ]+-linux\.tar\.gz' <<< "$page" | sed -n '1p')
+  if [[ -z "$archive_url" ]]; then
+    log_error "Could not resolve the Android Studio Linux x64 download URL"
+    return 1
+  fi
+  version=$(sed -E 's#.*/ide-zips/([^/]+)/.*#\1#' <<< "$archive_url")
+
+  local install_dir="/opt/android-studio"
+  local marker="${install_dir}/.initora-source"
+  local installed_source=""
+
+  if [[ -x "${install_dir}/bin/studio" ]]; then
+    [[ -f "$marker" ]] && installed_source=$(cat "$marker")
+    if [[ "$installed_source" == "$archive_url" ]]; then
+      skip "Android Studio already up to date (${version})"
+      return
+    elif [[ -n "$installed_source" ]]; then
+      log_info "Updating Android Studio to ${version}"
+    else
+      log_warn "Android Studio exists but was not installed by initora; skipping"
+      return
+    fi
+  fi
+
+  local archive="${CACHE_DIR}/android-studio-${version}.tar.gz"
+  cached_download "$archive_url" "$archive" || {
+    log_error "Failed to download Android Studio"
+    return 1
+  }
+
+  if ! tar -tzf "$archive" >/dev/null 2>&1; then
+    log_error "Downloaded Android Studio archive is invalid"
+    rm -f "$archive"
+    return 1
+  fi
+
+  local extract_dir="${CACHE_DIR}/android-studio-extract"
+  rm -rf "$extract_dir"
+  mkdir -p "$extract_dir"
+  tar -xzf "$archive" -C "$extract_dir" || {
+    log_error "Failed to extract Android Studio"
+    return 1
+  }
+
+  local source_dir="${extract_dir}/android-studio"
+  if [[ ! -x "${source_dir}/bin/studio" ]]; then
+    source_dir=$(find "$extract_dir" -mindepth 1 -maxdepth 2 -type d \
+      -name 'android-studio*' -print -quit)
+  fi
+
+  if [[ ! -x "${source_dir}/bin/studio" ]]; then
+    log_error "Could not find the Android Studio launcher in the archive"
+    return 1
+  fi
+
+  run_as_root rm -rf "$install_dir"
+  run_as_root mkdir -p "$(dirname "$install_dir")"
+  run_as_root cp -a "$source_dir" "$install_dir"
+  printf '%s\n' "$archive_url" | run_as_root tee "$marker" > /dev/null
+  run_as_root ln -sfn "$install_dir/bin/studio" /usr/local/bin/studio
+
+  local desktop_file="/usr/local/share/applications/android-studio.desktop"
+  run_as_root mkdir -p "$(dirname "$desktop_file")"
+  run_as_root tee "$desktop_file" > /dev/null << EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Android Studio
+Comment=Official IDE for Android development
+Exec=${install_dir}/bin/studio %u
+Icon=${install_dir}/bin/studio.png
+Terminal=false
+Categories=Development;IDE;
+StartupNotify=true
+StartupWMClass=android-studio
+EOF
+  run_as_root update-desktop-database "$(dirname "$desktop_file")" 2>/dev/null || true
+
+  rm -rf "$extract_dir"
+  ok "Android Studio ${version} installed"
+}
+
+_configure_android_env() {
+  if [[ "${INSTALL_ANDROID_STUDIO:-true}" != "true" && \
+        "${INSTALL_FLUTTER:-true}" != "true" ]]; then
+    skip "Android environment disabled in config"
+    return
+  fi
+
+  step "Configuring Android SDK environment"
 
   local user="${SETUP_USER:-$USER}"
   local user_home="${SETUP_HOME:-$HOME}"
+  local sdk="${ANDROID_HOME:-${user_home}/Android/Sdk}"
+  local nvidia_line=""
 
-  if [[ -x "/usr/local/bin/starship" ]]; then
-    skip "Starship already installed: $(starship --version 2>/dev/null)"
-  else
-    log_info "Downloading and installing Starship..."
-    curl -sS https://starship.rs/install.sh | run_as_root sh -s -- --yes --bin-dir /usr/local/bin || {
-      log_error "Failed to install Starship"
-      return 1
-    }
-    ok "Starship installed"
+  sudo -u "$user" mkdir -p \
+    "$sdk/platform-tools" \
+    "$sdk/emulator" \
+    "$sdk/cmdline-tools/latest/bin"
+
+  if lspci 2>/dev/null | grep -qi nvidia; then
+    nvidia_line="alias emulador-nvidia='env ANDROID_EMU_GLES_MAX_VERSION=4.6 \"\$ANDROID_HOME/emulator/emulator\" -gpu host'"
   fi
 
-  local bashrc="${user_home}/.bashrc"
-  if ! grep -qF 'starship init bash' "$bashrc" 2>/dev/null; then
-    cat >> "$bashrc" << 'STAREOF'
+  local android_block
+  android_block=$(cat << EOF
+export ANDROID_HOME="${sdk}"
+export ANDROID_SDK_ROOT="\${ANDROID_HOME}"
+export PATH="\${ANDROID_HOME}/emulator:\${ANDROID_HOME}/platform-tools:\${ANDROID_HOME}/cmdline-tools/latest/bin:\${PATH}"
+${nvidia_line}
+EOF
+  )
 
-# Starship -- modern dev-focused shell prompt
-eval "$(starship init bash)"
-STAREOF
-    log_info "Starship activation added to .bashrc"
-  else
-    skip "Starship already present in .bashrc"
-  fi
-
-  local starship_cfg="${user_home}/.config/starship.toml"
-  if [[ ! -f "$starship_cfg" ]]; then
-    sudo -u "$user" mkdir -p "$(dirname "$starship_cfg")"
-    sudo -u "$user" tee "$starship_cfg" > /dev/null << 'TOMLEOF'
-# starship.toml -- initora default (dev-focused, low visual noise)
-format = """
-$directory\
-$git_branch\
-$git_status\
-$java\
-$nodejs\
-$python\
-$golang\
-$aws\
-$docker_context\
-$cmd_duration\
-$line_break\
-$character"""
-
-add_newline = true
-
-[character]
-success_symbol = '[❯](bold green)'
-error_symbol   = '[❯](bold red)'
-
-[directory]
-style             = 'bold fg:201'
-truncation_length = 3
-truncate_to_repo  = true
-format            = '[$path]($style)[$read_only]($read_only_style) '
-
-[git_branch]
-symbol = 'git '
-style  = 'bold fg:117'
-format = 'on [$symbol$branch]($style) '
-
-[git_status]
-format     = '([$all_status$ahead_behind]($style) )'
-style      = 'bold fg:11'
-conflicted = '⚠'
-ahead      = '⇡${count}'
-behind     = '⇣${count}'
-diverged   = '⇕⇡${ahead_count}⇣${behind_count}'
-untracked  = '?${count}'
-modified   = '!${count}'
-staged     = '+${count}'
-deleted    = '✘${count}'
-
-[git_commit]
-tag_symbol = " tag "
-
-[java]
-symbol = 'java '
-style  = 'bold fg:33'
-format = 'via [$symbol($version)]($style) '
-
-[nodejs]
-symbol = 'nodejs '
-style  = 'bold green'
-format = 'via [$symbol($version)]($style) '
-
-[python]
-symbol = "python "
-format = "via [$symbol$version]($style) "
-style  = "bold fg:6"
-
-[golang]
-symbol = "golang "
-format = "via [$symbol$version]($style) "
-style  = "bold fg:3"
-
-[aws]
-symbol = "aws "
-format = 'on [$symbol($profile )(\($region\) )]($style)'
-style = 'bold fg:202'
-
-[docker_context]
-symbol          = 'docker '
-style           = 'bold blue'
-format          = 'via [$symbol$context]($style) '
-only_with_files = true
-
-[cmd_duration]
-min_time          = 2000
-format            = 'took [$duration](bold yellow) '
-show_milliseconds = false
-
-[time]
-disabled = true
-
-[battery]
-disabled = true
-TOMLEOF
-    ok "Starship initial config created"
-  else
-    skip "starship.toml already exists"
-  fi
+  set_user_bashrc_block "android-sdk" "$android_block"
+  ok "Android SDK environment configured at ${sdk}"
 }
 
+_install_flutter() {
+  if [[ "${INSTALL_FLUTTER:-true}" != "true" ]]; then
+    skip "Flutter SDK install disabled in config"
+    return
+  fi
+
+  step "Installing Flutter SDK (stable)"
+
+  local user="${SETUP_USER:-$USER}"
+  local user_home="${SETUP_HOME:-$HOME}"
+  local install_dir="${user_home}/.local/flutter"
+
+  if [[ -d "${install_dir}/.git" ]]; then
+    skip "Flutter SDK already present at ${install_dir}"
+  else
+    sudo -u "$user" mkdir -p "$(dirname "$install_dir")"
+    sudo -u "$user" git clone --depth 1 --branch stable \
+      https://github.com/flutter/flutter.git "$install_dir" || {
+        log_error "Failed to clone the Flutter SDK"
+        return 1
+      }
+    ok "Flutter SDK cloned"
+  fi
+
+  local flutter_block="export PATH=\"${install_dir}/bin:\${PATH}\""
+  set_user_bashrc_block "flutter" "$flutter_block"
+
+  log_info "Prefetching the Flutter/Dart SDK..."
+  sudo -u "$user" env HOME="$user_home" "${install_dir}/bin/flutter" --version \
+    >/dev/null 2>&1 || \
+    log_warn "Flutter prefetch failed; run 'flutter --version' manually to diagnose."
+
+  log_warn "Accept Android licenses manually with: flutter doctor --android-licenses"
+  ok "Flutter SDK ready"
+}
+
+# =============================================================================
+# 10. Shell prompt — Oh My Posh
+# =============================================================================
+
+_install_oh_my_posh() {
+  if [[ "${INSTALL_OH_MY_POSH:-true}" != "true" ]]; then
+    skip "Oh My Posh disabled in config"
+    return
+  fi
+
+  step "Installing Oh My Posh (pure theme)"
+
+  dnf_install oh-my-posh
+
+  local ohmyposh_bin
+  ohmyposh_bin=$(command -v oh-my-posh 2>/dev/null || true)
+  if [[ -z "$ohmyposh_bin" ]]; then
+    log_error "oh-my-posh binary not found after installation"
+    return 1
+  fi
+
+  local user="${SETUP_USER:-$USER}"
+  local user_home="${SETUP_HOME:-$HOME}"
+  local theme="${OH_MY_POSH_THEME:-pure}"
+  local config_dir="${user_home}/.config/oh-my-posh"
+  local config_file="${config_dir}/${theme}.omp.json"
+
+  sudo -u "$user" mkdir -p "$config_dir"
+
+  if [[ -f "$config_file" ]]; then
+    skip "Oh My Posh theme configuration already exists"
+  else
+    sudo -u "$user" "$ohmyposh_bin" config export \
+      --config "$theme" --output "$config_file" || {
+        log_warn "Could not export theme '${theme}'; using it by name instead"
+        config_file="$theme"
+      }
+    ok "Oh My Posh theme '${theme}' configured"
+  fi
+
+  local activation="eval \"\$(${ohmyposh_bin} init bash --config '${config_file}')\""
+  set_user_bashrc_block "oh-my-posh" "$activation"
+  ok "Oh My Posh activation configured in .bashrc"
+}
+
+# =============================================================================
+# 11. AI desktop applications
+# =============================================================================
+
+_install_opencode_desktop() {
+  if [[ "${INSTALL_OPENCODE_DESKTOP:-true}" != "true" ]]; then
+    skip "OpenCode Desktop install disabled in config"
+    return
+  fi
+
+  step "Installing OpenCode Desktop"
+
+  local latest_url="https://opencode.ai/update/api/latest/desktop/opencode/opencode-desktop-linux-x86_64.rpm"
+  local resolved_url version installed_version rpm_file
+
+  # A ranged GET resolves the redirect without downloading the whole RPM.
+  if ! resolved_url=$(curl -fsSL -r 0-0 -o /dev/null -w '%{url_effective}' "$latest_url"); then
+    log_error "Could not resolve the latest OpenCode Desktop release"
+    return 1
+  fi
+
+  version=$(sed -E 's#.*/bin/([^/]+)/.*#\1#' <<< "$resolved_url")
+  if [[ -z "$version" ]]; then
+    log_error "Could not parse the OpenCode Desktop version from $resolved_url"
+    return 1
+  fi
+
+  if installed_version=$(get_installed_version opencode-desktop 2>/dev/null); then
+    log_info "Installed OpenCode Desktop: ${installed_version}"
+    if version_ge "$installed_version" "$version"; then
+      skip "OpenCode Desktop already up to date (${installed_version})"
+      return
+    fi
+  fi
+
+  log_info "Latest OpenCode Desktop: ${version}"
+  rpm_file="${CACHE_DIR}/opencode-desktop-${version}-x86_64.rpm"
+  cached_download "$resolved_url" "$rpm_file" || {
+    log_error "Failed to download OpenCode Desktop"
+    return 1
+  }
+
+  if ! rpm -qp --queryformat '%{NAME}\n' "$rpm_file" &>/dev/null; then
+    log_error "Downloaded OpenCode Desktop RPM is invalid"
+    rm -f "$rpm_file"
+    return 1
+  fi
+
+  run_as_root dnf install -y --allowerasing "$rpm_file" || {
+    log_error "Failed to install OpenCode Desktop"
+    return 1
+  }
+
+  ok "OpenCode Desktop ${version} installed"
+}
+
+_install_antigravity_tarball() {
+  local label="$1"
+  local url="$2"
+  local install_dir="$3"
+  local symlink_name="$4"
+
+  local marker="${install_dir}/.initora-source"
+  local installed_source=""
+
+  if [[ -d "$install_dir" ]]; then
+    [[ -f "$marker" ]] && installed_source=$(cat "$marker")
+    if [[ "$installed_source" == "$url" ]]; then
+      skip "$label already up to date"
+      return
+    elif [[ -n "$installed_source" ]]; then
+      log_info "Updating $label"
+    else
+      log_warn "$label exists but was not installed by initora; skipping"
+      return
+    fi
+  fi
+
+  local archive
+  archive="${CACHE_DIR}/${label}-$(basename "$url")"
+  cached_download "$url" "$archive" || {
+    log_error "Failed to download $label"
+    return 1
+  }
+
+  if ! tar -tzf "$archive" >/dev/null 2>&1; then
+    log_error "Downloaded $label archive is invalid"
+    rm -f "$archive"
+    return 1
+  fi
+
+  local extract_dir="${CACHE_DIR}/${label}-extract"
+  rm -rf "$extract_dir"
+  mkdir -p "$extract_dir"
+  tar -xzf "$archive" -C "$extract_dir" || {
+    log_error "Failed to extract $label"
+    return 1
+  }
+
+  local source_dir binary rel_binary
+  source_dir=$(find "$extract_dir" -mindepth 1 -maxdepth 2 -type d \
+    -iname 'antigravity*' -print -quit)
+  [[ -n "$source_dir" ]] || source_dir="$extract_dir"
+
+  binary=$(find "$source_dir" -maxdepth 3 -type f -perm -u+x \
+    \( -iname 'antigravity' -o -iname 'antigravity*ide*' -o -iname 'Antigravity' \) \
+    -print -quit)
+
+  if [[ -z "$binary" ]]; then
+    log_error "Could not find the $label launcher in the archive"
+    return 1
+  fi
+
+  rel_binary="${binary#"$source_dir"/}"
+
+  run_as_root rm -rf "$install_dir"
+  run_as_root mkdir -p "$install_dir"
+  run_as_root cp -a "$source_dir/." "$install_dir/"
+  printf '%s\n' "$url" | run_as_root tee "$marker" > /dev/null
+  run_as_root ln -sfn "${install_dir}/${rel_binary}" "/usr/local/bin/${symlink_name}"
+
+  local icon
+  icon=$(find "$install_dir" -maxdepth 4 -type f \
+    \( -iname '*icon*.png' -o -iname '*logo*.png' -o -iname '*.svg' \) \
+    -print -quit)
+  [[ -n "$icon" ]] || icon="${install_dir}/${rel_binary}"
+
+  local desktop_file="/usr/local/share/applications/${symlink_name}.desktop"
+  run_as_root mkdir -p "$(dirname "$desktop_file")"
+  run_as_root tee "$desktop_file" > /dev/null << EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=${label}
+Comment=${label} from Google
+Exec=${install_dir}/${rel_binary} %U
+Icon=${icon}
+Terminal=false
+Categories=Development;IDE;
+StartupNotify=true
+EOF
+  run_as_root update-desktop-database "$(dirname "$desktop_file")" 2>/dev/null || true
+
+  rm -rf "$extract_dir"
+  ok "$label installed"
+}
+
+_install_antigravity_apps() {
+  if [[ "${INSTALL_ANTIGRAVITY_APPS:-true}" != "true" ]]; then
+    skip "Antigravity desktop apps disabled in config"
+    return
+  fi
+
+  step "Installing Antigravity desktop apps (latest versions)"
+
+  local page ide_url desktop_url
+  if ! page=$(curl -fsSL --max-time 30 https://antigravity.google/download); then
+    log_error "Could not fetch the Antigravity download page"
+    return 1
+  fi
+
+  ide_url=$(grep -oE 'https://[^" ]+/linux-x64/Antigravity%20IDE\.tar\.gz' <<< "$page" | sed -n '1p')
+  desktop_url=$(grep -oE 'https://[^" ]+/linux-x64/Antigravity\.tar\.gz' <<< "$page" | sed -n '1p')
+
+  if [[ -z "$ide_url" || -z "$desktop_url" ]]; then
+    log_error "Could not resolve the Antigravity Linux x64 download URLs"
+    return 1
+  fi
+
+  _install_antigravity_tarball "Antigravity IDE" "$ide_url" \
+    "/opt/antigravity-ide" "antigravity-ide"
+  _install_antigravity_tarball "Antigravity Desktop" "$desktop_url" \
+    "/opt/antigravity-desktop" "antigravity-desktop"
+}
 
 # =============================================================================
 # Standalone entry point

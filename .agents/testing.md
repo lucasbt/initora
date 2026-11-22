@@ -45,6 +45,10 @@ packages and modify the system.
 bash -n bootstrap.sh initora utils.sh modules/*.sh migrations/*.sh
 shellcheck -x -S warning bootstrap.sh initora utils.sh modules/*.sh migrations/*.sh completions/*.bash
 actionlint .github/workflows/*.yml
+
+# Legacy runtime managers must be gone from executable code/config
+! grep -RniE '_install_(sdkman|nvm|rust|golang|starship)|INSTALL_STARSHIP' \
+  modules/ initora-default.config
 ```
 
 ### CLI behavior
@@ -110,29 +114,52 @@ before running.
      `fuse-overlayfs` content
    - run `initora update`
    - confirm both were removed and user-authored files were untouched
-6. **Podman**
+6. **Legacy runtimes (migration 0004)**
+   - add the old `# SDKMAN`, `# NVM`, `# Golang`, `# Rust / Cargo`, and
+     `# Starship` blocks to `~/.bashrc`
+   - run `initora update`
+   - confirm only those blocks were removed, user lines were preserved, and the
+     `mise` block was added when `~/.local/bin/mise` already exists
+7. **Runtime toolchain**
+   ```bash
+   java -version        # newest Java LTS resolved by mise
+   node --version       # newest Node.js LTS resolved by mise
+   corepack --version
+   oh-my-posh --version
+   grep -A1 'initora: oh-my-posh' ~/.bashrc
+   ```
+8. **Mobile development**
+   ```bash
+   id -nG "$USER" | tr ' ' '\n' | grep -E '^(libvirt|kvm)$'
+   systemctl is-active libvirtd
+   studio --version 2>/dev/null || true
+   flutter --version
+   echo "$ANDROID_HOME"
+   ```
+   `flutter doctor --android-licenses` must be accepted manually.
+9. **Podman**
    ```bash
    systemctl --user status podman.socket
    podman info | grep -i overlay
    ```
    The storage driver should be `overlay` without `fuse-overlayfs`.
-7. **Graphics**
-   ```bash
-   vainfo
-   nvidia-smi          # hybrid NVIDIA machines
-   glxinfo -B
-   ```
-8. **LocalSearch**
-   ```bash
-   gsettings get org.freedesktop.Tracker3.Miner.Files index-single-directories
-   gsettings get org.freedesktop.Tracker3.Miner.Files crawling-interval
-   ```
-9. **Fonts**
-   ```bash
-   fc-list | grep -iE 'Hack|Meslo|Source Code Pro|Ubuntu Mono|IBM Plex Mono'
-   fc-list | grep -i 'JetBrains Mono'
-   ```
-10. **Uninstall**
+10. **Graphics**
+    ```bash
+    vainfo
+    nvidia-smi          # hybrid NVIDIA machines
+    glxinfo -B
+    ```
+11. **LocalSearch**
+    ```bash
+    gsettings get org.freedesktop.Tracker3.Miner.Files index-single-directories
+    gsettings get org.freedesktop.Tracker3.Miner.Files crawling-interval
+    ```
+12. **Fonts**
+    ```bash
+    fc-list | grep -iE 'Hack|Meslo|Source Code Pro|Ubuntu Mono|IBM Plex Mono'
+    fc-list | grep -i 'JetBrains Mono'
+    ```
+13. **Uninstall**
     ```bash
     initora uninstall
     ```

@@ -55,6 +55,11 @@ _configure_firmware() {
 _install_graphics() {
   step "Configuring graphics and VA-API"
 
+  # Common renderer stack for Vulkan/OpenGL applications and development.
+  dnf_install \
+    mesa-vulkan-drivers vulkan-loader mesa-libGLU \
+    libglvnd-opengl libglvnd-egl libglvnd-glx
+
   has_cmd lspci || dnf_install pciutils
 
   local gpus
@@ -95,7 +100,7 @@ _install_nvidia() {
   run_as_root dnf config-manager setopt \
     rpmfusion-nonfree-nvidia-driver.enabled=1 2>/dev/null || true
 
-  dnf_install akmod-nvidia xorg-x11-drv-nvidia-cuda
+  dnf_install akmod-nvidia xorg-x11-drv-nvidia-cuda kernel-devel acpid
 
   if [[ "${INSTALL_NVIDIA_VAAPI:-true}" == "true" ]]; then
     dnf_install nvidia-vaapi-driver || \
@@ -107,7 +112,18 @@ _install_nvidia() {
     log_warn "  sudo mokutil --import /etc/pki/akmods/certs/public_key.der"
   fi
 
-  log_info "After reboot, verify with: nvidia-smi && vainfo && glxinfo -B"
+  local nvidia_version
+  nvidia_version=$(modinfo -F version nvidia 2>/dev/null || true)
+  if [[ -z "$nvidia_version" ]]; then
+    log_warn "NVIDIA kernel module is not available yet; akmods may still be building."
+    log_warn "Reboot, then verify with: nvidia-smi && vainfo && glxinfo -B"
+  else
+    log_info "NVIDIA kernel module version: ${nvidia_version}"
+    if ! grep -q '^nvidia[[:space:]]' /proc/modules 2>/dev/null; then
+      log_warn "NVIDIA module is installed but not loaded. Reboot to activate it."
+    fi
+  fi
+
   ok "NVIDIA driver configured"
 }
 
@@ -298,6 +314,12 @@ _system_update() {
   log_info "Removing orphaned packages..."
   run_as_root dnf autoremove -y || true
 
+  if has_cmd needs-restarting; then
+    if ! needs-restarting -r &>/dev/null; then
+      log_warn "A reboot is recommended (kernel or core libraries were updated)."
+    fi
+  fi
+
   _configure_firmware
 }
 
@@ -309,6 +331,8 @@ _setup_directories() {
     "$user_home/.local/share/initora"
     "$user_home/.config/initora"
     "$user_home/.cache/initora"
+    "$user_home/.local/bin"
+    "$user_home/.local/opt"
   )
   for d in "${dirs[@]}"; do
     [[ -d "$d" ]] || sudo -u "${SETUP_USER:-$USER}" mkdir -p "$d"

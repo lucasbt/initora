@@ -105,6 +105,7 @@ file-roller
 dconf-editor
 cifs-utils
 fuse
+fuse-libs
 fuse-sshfs
 gvfs-fuse
 gnome-tweaks
@@ -164,6 +165,9 @@ libreoffice-icon-theme-papirus
 libvirt
 bottles
 gnome-boxes
+
+# Browser
+firefox
 
 # Misc
 cozy

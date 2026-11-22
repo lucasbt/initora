@@ -31,7 +31,13 @@ overwrites it. `bootstrap.sh` also creates it during installation.
 | `INSTALL_MULTIMEDIA` | `true` | Install codecs, FFmpeg, GStreamer, VA-API |
 | `INSTALL_PROPRIETARY_FIRMWARE` | `true` | Run `fwupdmgr` updates |
 | `INSTALL_PODMAN_DESKTOP` | `true` | Install Podman Desktop |
-| `INSTALL_STARSHIP` | `false` | Install Starship prompt |
+| `INSTALL_MISE` | `true` | Install mise and all language runtimes |
+| `INSTALL_OH_MY_POSH` | `true` | Install Oh My Posh with the `pure` theme |
+| `INSTALL_KVM` | `true` | Install and configure KVM/libvirt |
+| `INSTALL_ANDROID_STUDIO` | `true` | Install Android Studio and configure Android env |
+| `INSTALL_FLUTTER` | `true` | Install the Flutter stable SDK |
+| `INSTALL_OPENCODE_DESKTOP` | `true` | Install the latest OpenCode Desktop RPM |
+| `INSTALL_ANTIGRAVITY_APPS` | `true` | Install Antigravity IDE and Desktop |
 | `PODMAN_DOCKER_ALIAS` | `true` | Add `docker=podman` aliases to `.bashrc` |
 | `ENABLE_RPMFUSION_FREE` | `true` | Add RPM Fusion Free |
 | `ENABLE_RPMFUSION_NONFREE` | `true` | Add RPM Fusion Non-Free |
@@ -45,6 +51,29 @@ overwrites it. `bootstrap.sh` also creates it during installation.
 | `DNF_KEEPCACHE` | `false` | `keepcache` |
 
 `gpgcheck=False` is hard-coded in `modules/00-system.sh` and is intentional.
+
+## Runtimes and prompt
+
+| Variable | Default | Notes |
+| :--- | :--- | :--- |
+| `MISE_JAVA_VERSION` | `lts` | Resolves dynamically to the newest Java LTS |
+| `MISE_NODE_VERSION` | `lts` | Resolves dynamically to the newest Node.js LTS |
+| `MISE_PYTHON_VERSION` | `latest` | Python version request for mise |
+| `MISE_GO_VERSION` | `latest` | Go version request for mise |
+| `MISE_RUST_VERSION` | `latest` | Rust version request for mise |
+| `OH_MY_POSH_THEME` | `pure` | Theme name exported to `~/.config/oh-my-posh/` |
+
+The `lts` aliases are resolved by mise at install time; no patch version is
+pinned in the repository. Maven and Gradle are always requested as `latest`.
+
+## Mobile development
+
+| Variable | Default | Notes |
+| :--- | :--- | :--- |
+| `ANDROID_HOME` | `~/Android/Sdk` | Android SDK root written to `.bashrc` |
+
+Android SDK subdirectories are created, but SDK packages and licenses are not
+accepted automatically. KVM group changes require logout/login.
 
 ## Graphics / NVIDIA
 
@@ -111,7 +140,7 @@ provided by RPM packages out of the Nerd Fonts array in
 Format: `remote app_id`, for example:
 
 ```text
-flathub org.mozilla.firefox
+flathub it.mijorus.gearlever
 ```
 
 ### `data/gnome-settings.list`
