@@ -6,9 +6,9 @@ Workstation bootstrap toolkit.
 ## Project scope
 
 - Target: Fedora Workstation 40+ (developed against Fedora 44), `x86_64` only.
-- Reference hardware: Acer Nitro AN515-58 — Intel i5-12450H (Alder Lake,
-  Gen12 iGPU), NVIDIA RTX 3050 Laptop (hybrid graphics), 32 GiB RAM,
-  512 GB NVMe SSD.
+- Tested on: Intel Gen12+ (Tiger Lake / 11th gen+), AMD RDNA 1+ (RX 5000+), NVIDIA Turing+ (RTX 20+).
+- Minimum: 16 GiB RAM, NVMe SSD, x86_64.
+- Note: Intel iGPU VA-API (iHD) requires Gen12+; older Intel GPUs work without hardware video acceleration.
 - The project is a Bash toolkit, not an application framework. Keep changes
   small, explicit, and consistent with the existing module style.
 
