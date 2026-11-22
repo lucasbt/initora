@@ -24,7 +24,7 @@ jobs:
         run: |
           # The branch has already been merged, so the correct version is already in the file
           VERSION=$(cat version)
-          echo "NEW_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "NEW_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "Creating release for version: v$VERSION"
 
       - name: Create Tag and Release on GitHub
@@ -43,14 +43,16 @@ jobs:
           TAG="v${NEW_VERSION}"
           
           # 1. Create custom header with PR details
-          echo "## 🚀 What's New in $TAG" > release_notes.md
-          echo "" >> release_notes.md
-          echo "**Source Branch:** \`$SOURCE_BRANCH\`" >> release_notes.md
-          echo "**PR Author:** @$PR_AUTHOR" >> release_notes.md
-          echo "**Original Description:**" >> release_notes.md
-          echo "> $PR_TITLE" >> release_notes.md
-          echo "" >> release_notes.md
-          echo "---" >> release_notes.md
+          {
+            echo "## 🚀 What's New in $TAG"
+            echo ""
+            echo "**Source Branch:** \`$SOURCE_BRANCH\`"
+            echo "**PR Author:** @$PR_AUTHOR"
+            echo "**Original Description:**"
+            echo "> $PR_TITLE"
+            echo ""
+            echo "---"
+          } > release_notes.md
           
           # 2. Create the Official Release appending auto-generated notes
           gh release create "$TAG" \

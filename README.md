@@ -29,7 +29,7 @@
 
 - **🎨 Visual Excellence:** Dark mode GNOME, 5 Nerd Fonts with ligatures, Microsoft fonts, custom Ptyxis terminal, and curated wallpaper collection.
 
-- **📦 App Ecosystem:** VSCode, Zed, Podman, AWS CLI, kubectl, DBeaver, Postman, Insomnia, Obsidian, Bitwarden, Draw.io, Typora, Chrome, and more.
+- **📦 App Ecosystem:** VSCode, Zed, Podman, AWS CLI, kubectl, DBeaver, Bruno, Insomnia, Obsidian, Bitwarden, Draw.io, Typora, Chrome, and more.
 
 - **🖥️ Hybrid Graphics:** Detects Intel, AMD, and NVIDIA GPUs; installs the correct VA-API drivers and the NVIDIA driver from RPM Fusion on hybrid laptops.
 
@@ -223,7 +223,7 @@ Initora is built on a series of specialized scripts located in the `modules/` di
 - **Podman Desktop:** GUI client for container management with AppImage auto-update.
 - **AWS CLI v2:** Latest AWS command-line tools for infrastructure management.
 - **kubectl:** Kubernetes command-line tool for cluster management.
-- **REST Clients:** Postman (AppImage with deep configuration) and Insomnia for API testing.
+- **REST Clients:** Bruno (latest x86_64 RPM from GitHub releases) and Insomnia for API testing.
 
 **Databases & Documentation:**
 - **DBeaver Community:** Universal database manager with auto-setup.

@@ -6,7 +6,7 @@
 #   - Runtime Managers: SDKMAN (Java LTS), Rust, Golang and NVM (Node.js).
 #   - AI Tools: Antigravity CLI and OpenCode.
 #   - Containers: Podman configuration, Docker alias, and Podman Desktop.
-#   - Cloud/Infra: AWS CLI v2, kubectl, and REST clients (Postman, Insomnia).
+#   - Cloud/Infra: AWS CLI v2, kubectl, and REST clients (Bruno, Insomnia).
 #   - Database/Docs: DBeaver Community, Draw.io, and Typora.
 #   - Editor Configuration: VSCode settings and toolchain integration.
 #   - Shell: Starship prompt installation and customized configuration.
@@ -49,9 +49,9 @@ module_20_dev_tools() {
   _install_kubectl
   _install_awscli
 
-  # ── 8. Clientes de API REST (mesmo propósito, agrupados)
+  # ── 8. Clientes de API REST
   _install_insomnia
-  _install_postman
+  _install_bruno
 
   # ── 9. Utilitários GUI (sem interdependências entre si)
   _install_dbeaver  # banco de dados
@@ -1149,50 +1149,60 @@ _install_insomnia() {
     ok "Insomnia installed/updated to ${github_version}"
 }
 
-_install_postman() {
-  step "Installing Postman"
-  local install_dir="/opt/Postman"
-  local postman_version
-  postman_version=$(
-    jq -r '.version // empty' \
-      "$install_dir/app/resources/app/package.json" \
-      2>/dev/null || true
-  )
-  local archive="${CACHE_DIR}/postman-linux-x64.tar.gz"
+_install_bruno() {
+  step "Installing Bruno"
+  local repo="usebruno/bruno"
+  local tag github_version installed_version
+  local release_json rpm_asset rpm_file
 
-  if [[ -n "$postman_version" && "$postman_version" != "null" ]]; then
-    skip "Postman already installed (${postman_version})"
-  else      
-      log_info "Downloading Postman..."
-      curl -L "https://dl.pstmn.io/download/latest/linux64" -o "$archive"
-      log_info "Installing Postman to ${install_dir}..."
-      sudo rm -rf "$install_dir"
-      sudo mkdir -p "$install_dir"
-      sudo tar -xzf "$archive" -C /opt
-      sudo chown -R "$USER:$USER" "$install_dir"
-      postman_version=$(jq -r '.version' "$install_dir/app/resources/app/package.json")
-      ok "Postman installed (${postman_version})"
+  tag=$(curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" \
+      | grep -oP '"tag_name":\s*"\K([^"]+)')
+
+  if [[ -z "$tag" ]]; then
+      log_error "Unable to identify the latest Bruno release on GitHub"
+      return 1
   fi
 
-  # Desktop entry (user-level, GNOME friendly)
-  local desktop_file="$SETUP_HOME/.local/share/applications/postman.desktop"
-  if [[ ! -f "$desktop_file" ]]; then
-      log_info "Creating Postman desktop entry..."
-      mkdir -p "$SETUP_HOME/.local/share/applications"
-      cat > "$desktop_file" <<EOF
-[Desktop Entry]
-Encoding=UTF-8
-Name=Postman
-Comment=API Development Environment
-Exec=${install_dir}/app/Postman --gtk-version=3 %U
-Icon=${install_dir}/app/resources/app/assets/icon.png
-Terminal=false
-Type=Application
-Categories=Development;
-StartupWMClass=Postman
-EOF
-      ok "Postman desktop entry created"
+  # v4.3.0 -> 4.3.0
+  github_version="${tag#v}"
+
+  log_info "Latest Bruno release: ${github_version}"
+
+  if installed_version=$(get_installed_version bruno); then
+      log_info "Installed Bruno version: ${installed_version}"
+
+      if version_ge "$installed_version" "$github_version"; then
+          skip "Bruno already up to date (${installed_version})"
+          return
+      fi
   fi
+
+  log_info "Installing/Updating Bruno..."
+
+  release_json=$(curl -fsSL \
+      "https://api.github.com/repos/${repo}/releases/tags/${tag}")
+
+  # Find x86_64 RPM asset (project targets x86_64 only)
+  rpm_asset=$(echo "$release_json" \
+      | grep -oP 'browser_download_url":\s*"\K([^"]*_x86_64_linux\.rpm)')
+
+  if [[ -z "$rpm_asset" ]]; then
+      log_error "Could not find Bruno x86_64 RPM asset"
+      return 1
+  fi
+
+  rpm_file="${CACHE_DIR}/$(basename "$rpm_asset")"
+
+  if [[ ! -f "$rpm_file" ]]; then
+      log_info "Downloading Bruno RPM..."
+      curl -fL "$rpm_asset" -o "$rpm_file"
+  else
+      log_info "Using cached RPM: $rpm_file"
+  fi
+
+  dnf_install "$rpm_file"
+
+  ok "Bruno installed/updated to ${github_version}"
 }
 
 

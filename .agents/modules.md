@@ -54,7 +54,7 @@ sourced by `initora`. They run in numeric order during a full installation.
   No `fuse-overlayfs` or custom `storage.conf` is written.
 - **Editors:** VS Code settings (Java runtimes, Podman socket, terminal/font
   preferences) and Zed. IntelliJ IDEA and Pulsar are not installed.
-- **Cloud/API:** AWS CLI v2, kubectl (amd64), Postman, Insomnia.
+- **Cloud/API:** AWS CLI v2, kubectl (amd64), Bruno (latest x86_64 RPM from GitHub releases), Insomnia.
 - **GUI tools:** DBeaver, Draw.io, Typora.
 - **AI CLIs:** Antigravity CLI and OpenCode.
 - **Shell:** Starship (optional).
