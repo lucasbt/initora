@@ -70,8 +70,12 @@ jobs:
           cp -a "$GITHUB_WORKSPACE" /home/tester/.local/share/initora
           chown -R tester:tester /home/tester
 
+          # $HOME is expanded by the tester shell inside `su -`, not by the runner.
+          # shellcheck disable=SC2016
           su - tester -c '$HOME/.local/share/initora/initora --help' > /tmp/initora-help.txt
           grep -q -- '-ia' /tmp/initora-help.txt
+
+          # shellcheck disable=SC2016
           su - tester -c '$HOME/.local/share/initora/initora list'
 
           # Comma-separated module IDs are no longer supported.
