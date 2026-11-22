@@ -51,13 +51,16 @@ initialize_sudo() {
 cleanup() {
   local exit_code=$?
 
-  if [[ $exit_code -eq 0 ]]; then
-    sudo find ~/.cache/initora/ -mindepth 1 ! -name '*.log' -delete
-    sudo dnf autoremove -yq > /dev/null
+  if [[ $exit_code -eq 0 && -d "${CACHE_DIR:-}" ]]; then
+    find "$CACHE_DIR" -mindepth 1 ! -name '*.log' -delete 2>/dev/null || true
   fi
 
-  kill "$SUDO_KEEPALIVE_PID" &>/dev/null || true
+  if [[ -n "${SUDO_KEEPALIVE_PID:-}" ]]; then
+    kill "$SUDO_KEEPALIVE_PID" &>/dev/null || true
+  fi
 }
+
+trap cleanup EXIT
 
 _error_handler() {
   local exit_code=$?
@@ -138,7 +141,6 @@ export HOME="$SETUP_HOME"
 BIN_DIR="${SETUP_HOME}/.local/bin"
 BIN_PATH="${BIN_DIR}/initora"
 CONFIG_DIR="${SETUP_HOME}/.config/initora"
-CONFIG_FILE="${CONFIG_DIR}/initora.config"
 SCRIPT_DIR="${SETUP_HOME}/.local/share/initora"
 SCRIPT_VERSION="$(cat "${SCRIPT_DIR}/version" 2>/dev/null | tr -d '[:space:]' || echo "unknown")"
 
@@ -450,6 +452,7 @@ _cmd_update() {
   # was reset), so it must be checked every time, not just on new commits.
   # ---------------------------------------------------------------------------
 
+  initialize_sudo
   _run_pending_migrations || {
     log_error "Update finished with pending/failed migrations. See log for details."
     exit 1
@@ -610,6 +613,14 @@ _preflight_check() {
     if [[ "$fedora_ver" -lt 40 ]]; then
       log_warn "This script targets Fedora 40+. Detected version: $fedora_ver"
     fi
+  fi
+
+  local arch
+  arch=$(uname -m)
+  if [[ "$arch" != "x86_64" ]]; then
+    log_warn "This project targets x86_64; detected architecture: ${arch}"
+  else
+    log_info "Architecture: ${arch}"
   fi
 
   log_info "Target user : ${SETUP_USER} (home: ${SETUP_HOME})"
@@ -855,7 +866,7 @@ main() {
       esac
       ;;
 
-    --all)
+    --all|-ia)
       _run_all_modules
       return 0
       ;;
@@ -882,15 +893,11 @@ main() {
   esac
 
   echo ""
-  if [[ "${INITORA_CHILD:-}" != "1" ]]; then    
-    log_info "Update directory permissions before exiting..."
-    run_as_root chown -R $SETUP_USER:$SETUP_USER $SETUP_HOME
-    log_info "Running cleanup tasks..."
-    cleanup
+  if [[ "${INITORA_CHILD:-}" != "1" ]]; then
     echo ""
     log_success "initora done. Log saved to: ${LOG_FILE}"
     echo ""
-  fi  
+  fi
 }
 
 main "$@"

@@ -9,15 +9,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Validate Branch Prefix
+        env:
+          SOURCE_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
-          SOURCE_BRANCH="${{ github.event.pull_request.head.ref }}"
           echo "Validating branch: $SOURCE_BRANCH"
           
           # Regular expression with allowed prefixes
-          PATTERN="^(feature|feat|bugfix|fix|hotfix|major|release|docs|chore)/.+$"
+          PATTERN="^(feature|feat|bugfix|fix|hotfix|major|minor|release|docs|documentation|chore)/.+$"
           
           if [[ ! "$SOURCE_BRANCH" =~ $PATTERN ]]; then
-            echo "::error::Invalid branch name! The branch '$SOURCE_BRANCH' must start with one of the following prefixes followed by a slash (/): feature/, feat/, bugfix/, fix/, hotfix/, major/, release/, docs/, chore/"
+            echo "::error::Invalid branch name! The branch '$SOURCE_BRANCH' must start with one of the following prefixes followed by a slash (/): feature/, feat/, bugfix/, fix/, hotfix/, major/, minor/, release/, docs/, documentation/, chore/"
             exit 1
           fi
           echo "Valid branch name!"

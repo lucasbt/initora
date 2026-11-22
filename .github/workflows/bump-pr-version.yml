@@ -27,6 +27,8 @@ jobs:
 
       - name: Calculate New Version by Branch
         id: bump_version
+        env:
+          SOURCE_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           # 1. Fetch current version straight from main branch to avoid accumulating incorrect bumps
           git fetch origin main
@@ -34,7 +36,6 @@ jobs:
           IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
           
           # 2. Get the PR's source branch name
-          SOURCE_BRANCH="${{ github.event.pull_request.head.ref }}"
           echo "Source branch: $SOURCE_BRANCH"
           
           # 3. Decide the increment
@@ -56,19 +57,21 @@ jobs:
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
       - name: Update and Commit File to PR
+        env:
+          SOURCE_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
-          if [ -z "${{ env.NEW_VERSION }}" ]; then
+          if [ -z "${NEW_VERSION:-}" ]; then
             echo "No version to update."
             exit 0
           fi
           
-          echo "${{ env.NEW_VERSION }}" > version
+          echo "$NEW_VERSION" > version
           
           # Verify if the file actually changed before committing (prevents loops)
           if ! git diff --exit-code version; then
             git add version
-            git commit -m "chore(version): bump version to ${{ env.NEW_VERSION }} [skip ci]"
-            git push origin ${{ github.event.pull_request.head.ref }}
+            git commit -m "chore(version): bump version to $NEW_VERSION [skip ci]"
+            git push origin "$SOURCE_BRANCH"
           else
             echo "The version file is already up to date."
           fi

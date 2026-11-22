@@ -21,15 +21,17 @@
 
 - **🎯 Modular Architecture:** 5 independent modules for granular control. Run specific modules or re-run safely anytime—fully idempotent. [See details below](#-modular-architecture)
 
-- **🚀 Performance-First:** DNF parallelization (10 concurrent downloads), NVMe/SATA I/O scheduler optimization, kernel `sysctl` hardening, and SSD TRIM automation.
+- **🚀 Performance-First:** DNF parallelization (10 concurrent downloads), kernel `sysctl` tuning for development workloads, and a bounded systemd journal.
 
 - **💻 Polyglot Toolchain:** Automated management for Java (SDKMAN: 21 LTS & 25), Node.js (NVM with LTS), Rust (rustup), and Golang (latest stable).
 
-- **🤖 AI-Ready:** Built-in support for Antigravity CLI, GitHub Copilot CLI, and OpenCode.
+- **🤖 AI-Ready:** Built-in support for Antigravity CLI and OpenCode.
 
-- **🎨 Visual Excellence:** Dark mode GNOME, 7 Nerd Fonts with ligatures, Microsoft fonts, custom Ptyxis terminal, and curated wallpaper collection.
+- **🎨 Visual Excellence:** Dark mode GNOME, 5 Nerd Fonts with ligatures, Microsoft fonts, custom Ptyxis terminal, and curated wallpaper collection.
 
-- **📦 App Ecosystem:** VSCode, IntelliJ IDEA, Zed, Pulsar, Podman, AWS CLI, kubectl, DBeaver, Postman, Insomnia, Obsidian, Bitwarden, Draw.io, Typora, Chrome, and more.
+- **📦 App Ecosystem:** VSCode, Zed, Podman, AWS CLI, kubectl, DBeaver, Postman, Insomnia, Obsidian, Bitwarden, Draw.io, Typora, Chrome, and more.
+
+- **🖥️ Hybrid Graphics:** Detects Intel, AMD, and NVIDIA GPUs; installs the correct VA-API drivers and the NVIDIA driver from RPM Fusion on hybrid laptops.
 
 - **🛠 Idempotency:** Safely re-run any module. Detects existing states, skips redundant operations, and updates outdated software.
 
@@ -72,8 +74,8 @@ Initora provides a comprehensive CLI with both interactive and scripted modes.
 | :--- | :--- |
 | `initora` | Interactive module selector (GUM UI). Choose modules via menu. |
 | `initora install` | Execute all 5 modules in sequence (full setup). |
-| `initora install -m 20` | Run specific module (e.g., dev tools). Use `00`, `10`, `20`, `30`, `40`. |
-| `initora install -m 20,30` | Run multiple modules (comma-separated). |
+| `initora -ia` | Short form for a full installation (all modules). |
+| `initora install -m 20` | Run a specific module (e.g., dev tools). Use `00`, `10`, `20`, `30`, `40`. |
 | `initora list` | Show all available modules and their descriptions. |
 | `initora update` | Self-update repository and apply pending migrations. |
 | `initora config` | Edit user configuration file (`~/.config/initora/initora.config`). |
@@ -84,7 +86,7 @@ Initora provides a comprehensive CLI with both interactive and scripted modes.
 
 **Full installation:**
 ```bash
-initora install
+initora -ia
 ```
 
 **Install only Dev Tools:**
@@ -92,9 +94,9 @@ initora install
 initora install -m 20
 ```
 
-**Install Desktop + Optimizations:**
+**Install a module by name:**
 ```bash
-initora install -m 30,40
+initora install -m desktop
 ```
 
 **View logs:**
@@ -112,7 +114,7 @@ Removes binary, config, cache, and aliases. *(Does not revert installed packages
 
 Initora ships with a bash completion script that suggests:
 
-- **Top-level commands:** `install`, `list`, `update`, `uninstall`, `config`, `log`, `--help`
+- **Top-level commands:** `install`, `list`, `update`, `uninstall`, `config`, `log`, `--help`, `-ia`
 - **`install` flags:** `--all`/`-a`, `--module`/`-m`
 - **Module names** for `-m`/`--module`, resolved dynamically from `initora list` (e.g. `system`, `dev-tools`, `desktop`, `optimizations`) — no need to remember module numbers
 
@@ -133,6 +135,8 @@ In both cases, open a new terminal (or `source ~/.local/share/bash-completion/co
 
 ```text
 .
+├── AGENTS.md               # Guide for AI agents working on this repo
+├── .agents/                # Detailed architecture and maintenance docs
 ├── bootstrap.sh            # Main entry point for installation
 ├── initora                 # CLI entry point for module management
 ├── initora-default.config  # Default configuration variables
@@ -144,15 +148,16 @@ In both cases, open a new terminal (or `source ~/.local/share/bash-completion/co
 │   ├── flatpak-pkgs.list  # List of Flatpak applications
 │   ├── gnome-settings.list # GSettings configuration list
 │   └── rpm-pkgs.list      # List of DNF/RPM packages
-├── migrations/            # Database migration scripts
+├── migrations/            # One-shot migration scripts
 │   ├── 0001-desktop-entry.sh
-│   └── 0002-bash-completion.sh
+│   ├── 0002-bash-completion.sh
+│   └── 0003-modern-hardware-cleanup.sh
 ├── modules/               # Modular setup scripts
 │   ├── 00-system.sh
 │   └── ...
 └── assets/                # Images and resources
     ├── initora.png
-    └── wallpaper*.jpg
+    └── wallpaper*.png
 ```
 
 ## 📂 Modular Architecture
@@ -163,16 +168,21 @@ Initora is built on a series of specialized scripts located in the `modules/` di
 *Core system setup, repository management, and multimedia support.*
 
 **What it does:**
-- **DNF Configuration:** Enables parallel package downloads (up to 10 concurrent), activates `fastestmirror` for faster resolution, and sets `defaultyes=True` for unattended installs.
-- **Repository Management:** Installs RPM Fusion (Free/Non-Free) for multimedia and restricted codecs; removes unwanted repos (PyCharm COPR, NVIDIA driver repo, Steam repo).
+- **DNF Configuration:** Enables parallel package downloads (up to 10 concurrent), activates `fastestmirror` for faster resolution, and sets `defaultyes=True` for unattended installs. Configuration uses DNF5-compatible options only.
+- **Repository Management:** Installs RPM Fusion (Free/Non-Free) for multimedia and restricted codecs; removes unwanted repos (PyCharm COPR and Steam). The NVIDIA RPM Fusion repository is kept enabled for hybrid graphics.
 - **Multimedia Stack:** Installs comprehensive codec support:
   - **Video codecs:** H.264, H.265, OpenH264 (for Firefox)
   - **Audio codecs:** FLAC, FAAC, AAC, MP3 (LAME)
-  - **Hardware acceleration:** VA-API with Intel media drivers (or AMD equivalent)
+  - **Hardware acceleration:** Detects the installed GPU and installs the matching VA-API driver:
+    - Intel (Broadwell/Gen12+) → `intel-media-driver` (iHD)
+    - AMD → `mesa-va-drivers` + `mesa-vdpau-drivers`
+    - NVIDIA → `akmod-nvidia`, `xorg-x11-drv-nvidia-cuda`, and `nvidia-vaapi-driver`
   - **Tools:** VLC, FFmpeg (full version from RPM Fusion), GStreamer plugins (base, good, bad, ugly)
 - **System Update:** Performs full `dnf upgrade`, removes orphaned packages, and optionally updates firmware (via `fwupdmgr`).
-- **Base Packages:** Installs essentials: Git, curl, wget, GnuPG, Flatpak, fontconfig, FZF, GNOME Keyring, and OpenSSL.
+- **Base Packages:** Installs essentials: Git, curl, wget, GnuPG, Flatpak, fontconfig, FZF, GNOME Keyring, PCI utilities, `switcheroo-control`, and OpenSSL.
 - **Directory Setup:** Creates project-specific directories (`~/.local/share/initora`, `~/.config/initora`, `~/.cache/initora`).
+
+> **Secure Boot + NVIDIA:** when Secure Boot is enabled, enroll the akmods MOK key (`sudo mokutil --import /etc/pki/akmods/certs/public_key.der`) and reboot before the NVIDIA driver can load.
 
 ---
 
@@ -206,11 +216,10 @@ Initora is built on a series of specialized scripts located in the `modules/` di
 
 **AI & Developer Tools:**
 - **Antigravity CLI:** Google's AI tool (successor to Gemini CLI) with automatic installer.
-- **GitHub Copilot CLI:** Command-line interface for GitHub Copilot integration.
 - **OpenCode:** Binary Go-based AI tool for code generation and analysis.
 
 **Container & Cloud Infrastructure:**
-- **Podman:** Full configuration with socket exposure for IDE integration (Docker alias provided).
+- **Podman:** Rootless configuration with a user socket for IDE integration, Docker aliases, and native overlay storage (no `fuse-overlayfs`).
 - **Podman Desktop:** GUI client for container management with AppImage auto-update.
 - **AWS CLI v2:** Latest AWS command-line tools for infrastructure management.
 - **kubectl:** Kubernetes command-line tool for cluster management.
@@ -224,15 +233,12 @@ Initora is built on a series of specialized scripts located in the `modules/` di
 **Terminals & Shells:**
 - **Starship:** Ultra-fast cross-shell prompt with a minimalist, low-latency configuration optimized for developers.
 
-**IDEs & Editors:**
+**Editors:**
 - **Visual Studio Code:** Deep configuration including:
   - Custom `settings.json` for performance tuning (minimap disabled, fontLigatures enabled)
   - Java runtime configuration (supports both Java 21 and 25 via SDKMAN)
-  - Terminal integration with Ptyxis and Podman socket
-  - Essential extensions (Prettier, ESLint, Docker, Java, Python, Go, Rust, etc.)
-- **IntelliJ IDEA Community:** Automated download and installation from JetBrains release API.
+  - Terminal integration with Ptyxis and a dynamically resolved Podman socket (`DOCKER_HOST`)
 - **Zed:** Modern code editor (install via official script).
-- **Pulsar:** Community-driven Atom successor with syntax highlighting and language support.
 
 ---
 
@@ -243,7 +249,7 @@ Initora is built on a series of specialized scripts located in the `modules/` di
 
 **GNOME Settings:**
 - **Theme & Appearance:** Enables dark mode, sets custom GTK/icon themes from configuration.
-- **Night Light:** Enables automatic blue-light reduction (8:00 PM – 8:00 AM by default).
+- **Night Light:** Enables blue-light reduction on a schedule (6:00 PM – 8:00 AM by default).
 - **Workspace Management:** Configures fixed 3 workspaces (not dynamic), with keyboard shortcuts for fast navigation (`Super+1/2/3`).
 - **Text Scaling:** Applies user-defined text scale for accessibility.
 - **Window Buttons:** Custom button layout (`appmenu:minimize,maximize,close`).
@@ -251,7 +257,7 @@ Initora is built on a series of specialized scripts located in the `modules/` di
 
 **Terminal Customization:**
 - **Ptyxis Profile:** Deep configuration including:
-  - Color palette (One Half Black — professional, eye-friendly)
+  - Color palette (Tomorrow Night Bright — professional, eye-friendly; customizable)
   - Font (JetBrains Mono 12 by default, customizable)
   - Scrollback history (10,000 lines)
   - Bold-is-bright and login-shell settings
@@ -261,16 +267,13 @@ Initora is built on a series of specialized scripts located in the `modules/` di
 - **Sudo Feedback:** Enables visual feedback when typing `sudo` password (asterisks).
 
 **System Optimization:**
-- **Service Cleanup:**
-  - Disables ABRT (crash reporter) for cleaner boot
-  - Disables ModemManager (unless using mobile broadband)
-  - Disables GNOME Remote Desktop (unless needed)
-  - Masks NetworkManager-wait-online for faster boot
-- **LocalSearch (Tracker3):** Disables system-wide file indexing to reduce background CPU/disk usage while keeping desktop search responsive.
+- **LocalSearch:** File indexing is enabled by default (upstream settings), so GNOME search finds files and documents. Set `LOCALSEARCH_ENABLE_FILES=false` to disable it.
+- **GNOME Software:** Automatic update checks and downloads are disabled via `gsettings`, without masking system services.
 
 **Visual Assets:**
-- **Nerd Fonts:** Downloads and installs 7 monospace Nerd Fonts:
-  - FiraCode, JetBrains Mono, Hack, Meslo, Source Code Pro, Ubuntu Mono, Cascadia Code
+- **Nerd Fonts:** Downloads and installs 5 monospace Nerd Fonts not already provided by RPM packages:
+  - Hack, Meslo, Source Code Pro, Ubuntu Mono, and IBM Plex Mono (Blex Mono)
+  - JetBrains Mono, Fira Code, and Cascadia Code come from Fedora RPM packages (`jetbrains-mono-fonts-all`, `fira-code-fonts`, `cascadia-code-fonts`)
   - All fonts include programming ligatures and Unicode glyphs for IDE/terminal use
 - **Microsoft Core Fonts:** Arial, Times New Roman, Courier New, etc. (via RPM installer).
 - **Wallpaper Collections:** Downloads curated wallpaper collection from GitHub (~100+ high-quality images) if enabled.
@@ -284,30 +287,19 @@ Initora is built on a series of specialized scripts located in the `modules/` di
 
 **Kernel Parameters (sysctl):**
 - **Swap Management:** Sets `swappiness=10` to prefer RAM over ZRAM compression, reducing latency.
-- **VFS Cache:** Sets `vfs_cache_pressure=50` to favor inode/dentry caching (benefits SSDs + development workloads).
-- **I/O Tuning:** Optimizes dirty page ratios for lower write latency (`dirty_ratio=10`, `dirty_background_ratio=3`).
-- **inotify Limits:** Increases `max_user_watches` to 524,288 — essential for IDEs (IntelliJ, VS Code) monitoring large projects.
+- **inotify Limits:** Increases `max_user_watches` to 524,288 — essential for editors and build tools monitoring large projects.
 - **Network (Container Workloads):** Increases TCP backlog and enables TCP fast open for containers and Kubernetes.
 
-**I/O Scheduler Configuration (udev rules):**
-Creates device-specific I/O scheduler rules:
-- **NVMe drives:** Uses `none` scheduler (hardware manages queuing).
-- **SATA SSDs:** Uses `mq-deadline` for low-latency command completion.
-- **HDDs:** Uses `bfq` (Budget Fair Queueing) for fair I/O prioritization.
-
 **Maintenance:**
-- **SSD TRIM (fstrim.timer):** Enables weekly automatic TRIM to maintain SSD performance over time; also runs immediately once.
-- **Journal Management:** Limits `systemd-journald` to 100 MB and 5 files to prevent bloated logs (`/var/log/journal/`).
+- **Journal Management:** Limits `systemd-journald` to 1 GB and 10 files to prevent unbounded log growth (`/var/log/journal/`).
 
-**Boot Behavior:**
-- Disables `NetworkManager-wait-online.service` for faster boot.
-- Removes GNOME Software autostart to reduce background CPU usage.
+> I/O scheduler udev rules, forced `fstrim`, dirty-page ratios, `vfs_cache_pressure`, and `fs.file-max` tuning from older versions were removed. Modern Fedora kernels and `fstrim.timer` already handle these correctly, and the old overrides added risk without measurable benefit.
 
 ---
 
 ## 🔄 How Modules Are Executed
 
-When you run `initora install` or select modules interactively:
+When you run `initora install`, `initora -ia`, or select modules interactively:
 
 1. Each module is sourced dynamically from `modules/NN-name.sh`
 2. The module function (e.g., `module_20_dev_tools`) is executed
@@ -364,6 +356,7 @@ Initora supports database migrations for applying updates between versions. Migr
 **Current migrations:**
 - `0001-desktop-entry.sh` — Adds GNOME application menu integration for existing installations.
 - `0002-bash-completion.sh` — Installs bash tab-completion for existing installations (see [Shell Autocomplete](#-shell-autocomplete)).
+- `0003-modern-hardware-cleanup.sh` — Removes legacy I/O scheduler udev rules, the `fuse-overlayfs` Podman storage override, and obsolete sysctl keys from older hardware tuning.
 
 ## 🔍 Logs & Troubleshooting
 

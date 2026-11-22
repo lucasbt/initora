@@ -4,9 +4,9 @@
 #
 # Tasks:
 #   - System Settings: Night Light, dark theme, text scaling, and window buttons.
-#   - Productivity: Fixed workspaces, custom keybindings, and service optimization.
+#   - Productivity: Fixed workspaces and custom keybindings.
 #   - Terminal: Deep Ptyxis terminal profile configuration (fonts, colors, shell).
-#   - Search: LocalSearch (Tracker3) tuning for lightweight indexing.
+#   - Search: LocalSearch file indexing (enabled by default).
 #   - Assets: Installs Nerd Fonts, Microsoft fonts, and curated wallpaper collections.
 #   - GNOME Extensions: Installs essential tools (Tweaks, Caffeine, AppIndicator).
 # =============================================================================
@@ -30,21 +30,22 @@ _run_as_user() {
 }
 
 # Font list
+# Fonts already provided by RPM packages are not duplicated here:
+#   JetBrains Mono -> jetbrains-mono-fonts-all
+#   Fira Code      -> fira-code-fonts
+#   Cascadia Code  -> cascadia-code-fonts
 FONTS=(
-  "FiraCode"
-  "JetBrainsMono"
   "Hack"
   "Meslo"
   "SourceCodePro"
   "UbuntuMono"
-  "CascadiaCode"
+  "IBMPlexMono"    # Blex Mono / IBM Plex Mono (Nerd Fonts asset name)
 )
 
 module_30_desktop() {
   log_section "Module: GNOME Desktop and Accessibility"
 
   _apply_gnome_settings
-  _disable_unnecessary_services
   _configure_ptyxis_profile
   _configure_localsearch
   _install_wallpapers
@@ -110,46 +111,6 @@ _configure_custom_keybinding(){
 }
 
 # -----------------------------------------------------------------------------
-_disable_unnecessary_services() {
-    step "Disable unnecessary services"
-    local user="${SETUP_USER:-$USER}"
-    local user_home
-    user_home=$(getent passwd "$user" | cut -d: -f6)
-
-    _disable_system_svc() {
-        local svc="$1"
-        if systemctl list-unit-files --no-legend "$svc" 2>/dev/null | grep -q "$svc"; then
-            sudo systemctl disable --now "$svc" 2>/dev/null || true
-        fi
-    }
-
-    _disable_user_svc() {
-        local svc="$1"
-        _run_as_user "$user" systemctl --user disable --now "$svc" 2>/dev/null || true
-    }
-
-    _mask_system_unit() {
-        local unit="$1"
-        systemctl list-unit-files --no-legend "$unit" 2>/dev/null | grep -q "$unit" && \
-            sudo systemctl mask "$unit" 2>/dev/null || true
-    }
-
-    _mask_system_unit "dnf5-makecache.timer"
-    _mask_system_unit "dnf5-makecache.service"
-    _mask_system_unit "NetworkManager-wait-online.service"
-
-    for svc in "abrtd.service" "abrt-ccpp.service" "abrt-oops.service"; do
-        _disable_system_svc "$svc"
-    done
-
-    _disable_system_svc "ModemManager.service"
-    _disable_system_svc "gnome-remote-desktop.service"
-
-    unset -f _disable_system_svc _disable_user_svc _mask_system_unit
-    ok "Unnecessary services disabled"
-}
-
-# -----------------------------------------------------------------------------
 _configure_ptyxis_profile() {
   step "Configuring Ptyxis terminal profile"
 
@@ -192,18 +153,28 @@ _configure_ptyxis_profile() {
 
 # -----------------------------------------------------------------------------
 _configure_localsearch() {
-    step "Configuring LocalSearch (lightweight indexing)"
+    step "Configuring LocalSearch (file indexing)"
     local user="${SETUP_USER:-$USER}"
 
-    gs_set() {
-        _run_as_user "$user" gsettings set "$1" "$2" "$3" 2>/dev/null || true
-    }
-
-    gs_set "org.freedesktop.Tracker3.Miner.Files" "index-single-directories" "[]"
-    gs_set "org.freedesktop.Tracker3.Miner.Files" "index-recursive-directories" "[]"
-    gs_set "org.freedesktop.Tracker3.Miner.Files" "crawling-interval" "-2"
-
-    ok "LocalSearch configured"
+    if [[ "${LOCALSEARCH_ENABLE_FILES:-true}" == "true" ]]; then
+        # Restore upstream defaults so desktop search indexes the home
+        # directory again. On modern hardware the background cost is low.
+        _run_as_user "$user" gsettings reset \
+            org.freedesktop.Tracker3.Miner.Files index-single-directories 2>/dev/null || true
+        _run_as_user "$user" gsettings reset \
+            org.freedesktop.Tracker3.Miner.Files index-recursive-directories 2>/dev/null || true
+        _run_as_user "$user" gsettings reset \
+            org.freedesktop.Tracker3.Miner.Files crawling-interval 2>/dev/null || true
+        ok "LocalSearch enabled with default indexing"
+    else
+        _run_as_user "$user" gsettings set \
+            org.freedesktop.Tracker3.Miner.Files index-single-directories "[]" 2>/dev/null || true
+        _run_as_user "$user" gsettings set \
+            org.freedesktop.Tracker3.Miner.Files index-recursive-directories "[]" 2>/dev/null || true
+        _run_as_user "$user" gsettings set \
+            org.freedesktop.Tracker3.Miner.Files crawling-interval "-2" 2>/dev/null || true
+        ok "LocalSearch file indexing disabled"
+    fi
 }
 
 # -----------------------------------------------------------------------------
@@ -245,8 +216,10 @@ _install_wallpapers() {
 _install_fonts() {
     step "Installing Nerd Fonts collection"
     local fonts_nerd_url="https://github.com/ryanoasis/nerd-fonts/releases/latest/download"
+    local cache_dir="${CACHE_DIR:-/tmp}"
+    mkdir -p "$cache_dir"
 
-    local fonts_dir="$HOME/.local/share/fonts/nerd-fonts"
+    local fonts_dir="${SETUP_HOME:-$HOME}/.local/share/fonts/nerd-fonts"
     mkdir -p "$fonts_dir"
 
     # Considera instalado se o diretório existir e não estiver vazio
@@ -254,22 +227,21 @@ _install_fonts() {
         skip "Nerd Fonts collection already exists"
         return
     fi
-    
-    mkdir -p "$fonts_dir"
 
     log_info "Download Nerd Fonts..."
+    local font zip_file url
     for font in "${FONTS[@]}"; do
         zip_file="${font}.zip"
         url="${fonts_nerd_url}/${zip_file}"
         log_info "Download $font..."
-        curl -fLo "/tmp/${zip_file}" "$url"
+        curl -fLo "${cache_dir}/${zip_file}" "$url"
         log_info "Extract $font..."
-        unzip -o "/tmp/${zip_file}" -d "$fonts_dir" >/dev/null
-        rm "/tmp/${zip_file}"
+        unzip -o "${cache_dir}/${zip_file}" -d "$fonts_dir" >/dev/null
+        rm -f "${cache_dir}/${zip_file}"
     done
 
     log_info "Updating fonts cache..."
-    fc-cache -fv >/dev/null
+    fc-cache -f >/dev/null
 
     ok "Nerd Fonts installed to $fonts_dir"
 }

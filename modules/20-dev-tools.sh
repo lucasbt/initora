@@ -4,11 +4,11 @@
 #
 # Tasks:
 #   - Runtime Managers: SDKMAN (Java LTS), Rust, Golang and NVM (Node.js).
-#   - AI Tools: Gemini CLI, GitHub Copilot and OpenCode.
+#   - AI Tools: Antigravity CLI and OpenCode.
 #   - Containers: Podman configuration, Docker alias, and Podman Desktop.
 #   - Cloud/Infra: AWS CLI v2, kubectl, and REST clients (Postman, Insomnia).
 #   - Database/Docs: DBeaver Community, Draw.io, and Typora.
-#   - IDE Configuration: VSCode settings, extensions, and toolchain integration.
+#   - Editor Configuration: VSCode settings and toolchain integration.
 #   - Shell: Starship prompt installation and customized configuration.
 # =============================================================================
 
@@ -42,8 +42,8 @@ module_20_dev_tools() {
   _configure_podman
   _install_podman_desktop
 
-  # ── 6. IDEs (IntelliJ requer Java 21 já instalado)
-  _install_ides
+  # ── 6. Editores (VS Code, Zed)
+  _install_editors
 
   # ── 7. Ferramentas CLI de infraestrutura
   _install_kubectl
@@ -489,13 +489,10 @@ EOF
 
   log_info "Checking for Rust updates..."
 
-  local update_output
-  update_output=$(
-    sudo -u "$user" bash -c '
-      [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
-      rustup update stable
-    '
-  ) || {
+  sudo -u "$user" bash -c '
+    [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+    rustup update stable
+  ' || {
     log_error "Failed to update Rust"
     return 1
   }
@@ -574,7 +571,8 @@ _install_opencode() {
   local user_home="${SETUP_HOME:-$HOME}"
   local install_dir="${user_home}/.opencode/bin"
   local binary="${install_dir}/opencode"
-  local symlink="${BIN_DIR}/opencode"
+  local bin_dir="${BIN_DIR:-${user_home}/.local/bin}"
+  local symlink="${bin_dir}/opencode"
 
   step "Installing OpenCode"
 
@@ -597,7 +595,7 @@ _install_opencode() {
     return 1
   }
 
-  mkdir -p "$BIN_DIR"
+  mkdir -p "$bin_dir"
   ln -sf "$binary" "$symlink"
 
   ok "OpenCode installed"
@@ -631,14 +629,21 @@ PODMANEOF
     fi
   fi
 
-  # Enable Podman socket for IDEs that expect /var/run/docker.sock
-  if ! sudo -u "$user" systemctl --user is-enabled podman.socket &>/dev/null; then
-    loginctl enable-linger "$USER" 2>/dev/null || true
-    sudo -u "$user" systemctl --user enable --now podman.socket 2>/dev/null || true
+  # Enable Podman socket for tools that expect /var/run/docker.sock.
+  # XDG_RUNTIME_DIR is required for `systemctl --user` when running via sudo.
+  local user_uid xdg_runtime_dir
+  user_uid=$(id -u "$user")
+  xdg_runtime_dir="/run/user/${user_uid}"
+
+  if ! sudo -u "$user" XDG_RUNTIME_DIR="$xdg_runtime_dir" \
+      systemctl --user is-enabled podman.socket &>/dev/null; then
+    loginctl enable-linger "$user" 2>/dev/null || true
+    sudo -u "$user" XDG_RUNTIME_DIR="$xdg_runtime_dir" \
+      systemctl --user enable --now podman.socket 2>/dev/null || true
     log_info "Podman socket enabled for user $user"
   fi
 
-  sudo mkdir -p /etc/containers
+  sudo mkdir -p /etc/containers/registries.conf.d
   sudo tee /etc/containers/registries.conf.d/99-dev.conf > /dev/null << 'EOF'
 [[registry]]
 prefix   = "docker.io"
@@ -653,16 +658,9 @@ prefix   = "quay.io"
 location = "quay.io"
 EOF
 
-  dnf_install fuse-overlayfs 2>/dev/null || true
-  mkdir -p ~/.config/containers
-  cat > ~/.config/containers/storage.conf << 'EOF'
-[storage]
-driver = "overlay"
-
-[storage.options.overlay]
-mount_program = "/usr/bin/fuse-overlayfs"
-EOF
-
+  # Rootless Podman uses the native overlay driver on modern kernels.
+  # fuse-overlayfs and a custom storage.conf are unnecessary and can
+  # degrade performance, so no storage configuration is written here.
 
   ok "Podman installed and configured"
 }
@@ -862,37 +860,11 @@ EOF
 
 
 # =============================================================================
-# 6. IDEs
+# 6. Editores
 # =============================================================================
 
-_install_ides() {
-  step "Installing IntelliJ"
-
-  # IntelliJ
-  if command -v idea &>/dev/null || [[ -x /opt/intellij/bin/idea.sh ]]; then
-    skip "IntelliJ already installed"
-  else
-    local json url tar
-    json=$(curl -s "https://data.services.jetbrains.com/products/releases?code=IIU&latest=true&type=release")
-    url=$(echo "$json" | jq -r '.IIU[0].downloads.linux.link')
-    tar="$CACHE_DIR/intellij.tar.gz"
-
-    cached_download "$url" "$tar"
-
-    sudo mkdir -p /opt/intellij
-    sudo tar -xzf "$tar" -C /opt/intellij --strip-components=1
-
-    sudo tee /usr/share/applications/intellij.desktop >/dev/null <<EOF
-[Desktop Entry]
-Name=IntelliJ IDEA
-Exec=/opt/intellij/bin/idea.sh
-Icon=/opt/intellij/bin/idea.svg
-Type=Application
-Categories=Development;IDE;
-StartupWMClass=IntelliJ
-EOF
-    ok "IntelliJ Installed"
-  fi
+_install_editors() {
+  step "Installing editors"
 
   # Zed
   local zed_bin="$SETUP_HOME/.local/bin/zed"
@@ -915,6 +887,8 @@ EOF
 _configure_vscode() {
   local user="${SETUP_USER:-$USER}"
   local user_home="${SETUP_HOME:-$HOME}"
+  local user_uid
+  user_uid=$(id -u "$user")
   local settings_dir="${user_home}/.config/Code/User"
   local sdkman_candidates="${user_home}/.sdkman/candidates/java"
  
@@ -928,8 +902,8 @@ _configure_vscode() {
  
   # ── Detectar IDs das instalações Java gerenciadas pelo SDKMAN
   local java21_id java25_id java21_path java25_path
-  java21_id=$(ls "$sdkman_candidates" 2>/dev/null | grep '^21\.' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
-  java25_id=$(ls "$sdkman_candidates" 2>/dev/null | grep '^25\.' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+  java21_id=$(find "$sdkman_candidates" -mindepth 1 -maxdepth 1 -type d -name '21.*' -printf '%f\n' 2>/dev/null | sort -V | tail -1)
+  java25_id=$(find "$sdkman_candidates" -mindepth 1 -maxdepth 1 -type d -name '25.*' -printf '%f\n' 2>/dev/null | sort -V | tail -1)
  
   if [[ -z "$java21_id" ]]; then
     log_warn "Java 21 not found in SDKMAN candidates — java.configuration.runtimes may be incomplete"
@@ -1022,7 +996,7 @@ _configure_vscode() {
   "spring-boot.ls.problem.application-properties.UNKNOWN_PROPERTY_KEY": "WARNING",
  
   "docker.environment": {
-    "DOCKER_HOST": "unix:///run/user/1000/podman/podman.sock"
+    "DOCKER_HOST": "unix:///run/user/${user_uid}/podman/podman.sock"
   },
   "docker.showStartPage": false,
   
