@@ -2,7 +2,7 @@
 # migrations/0003-modern-hardware-cleanup.sh
 #
 # Cleans up tuning that older initora versions applied for the previous
-# (Haswell-era) machine and that no longer exists in the current modules:
+# (older hardware) machine and that no longer exists in the current modules:
 #
 #   - /etc/udev/rules.d/60-ioschedulers.conf  (forced I/O scheduler)
 #   - ~/.config/containers/storage.conf       (fuse-overlayfs override)

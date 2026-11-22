@@ -2,15 +2,19 @@
 
 ## Target hardware
 
-- Acer Nitro AN515-58
-- Intel Core i5-12450H (Alder Lake, 8 cores / 12 threads)
-- Intel Gen12 iGPU + NVIDIA RTX 3050 Laptop (hybrid graphics)
-- 32 GiB RAM
-- 512 GB NVMe SSD
+**Tested on:**
+- Intel Gen12+ (Tiger Lake / 11th gen+)
+- AMD RDNA 1+ (RX 5000+)
+- NVIDIA Turing+ (RTX 20+)
+
+**Minimum requirements:**
+- Architecture: x86_64
+- RAM: 16 GiB
+- Storage: NVMe SSD
 
 The previous tuning targeted a Haswell-era laptop with 8 GiB RAM and a SATA
 SSD. Several settings were useful there but are unnecessary or counterproductive
-on this machine.
+on modern hardware.
 
 ## What remains
 
@@ -51,8 +55,8 @@ unbounded growth.
 
 ### Desktop
 
-- GNOME animations are **enabled** (`GNOME_ANIMATIONS=true`). The Gen12 iGPU
-  handles them without the distraction of disabled animations.
+- GNOME animations are **enabled** (`GNOME_ANIMATIONS=true`). Modern Intel iGPUs
+  (Gen12+) handle them smoothly.
 - LocalSearch file indexing is **enabled** by default. It is cheap on this
   hardware and keeps GNOME search useful.
 - GNOME Software automatic update checks/downloads are disabled with
@@ -91,8 +95,8 @@ This avoids duplicate font families and reduces download size.
 
 ## Graphics / VA-API
 
-- Intel Gen12 uses the iHD driver: `intel-media-driver`, not
-  `libva-intel-driver` (which targets Haswell and older).
+- Intel Gen12+ (Tiger Lake, Alder Lake, Meteor Lake) uses the iHD driver:
+  `intel-media-driver`, not `libva-intel-driver` (which targets Haswell and older).
 - AMD uses `mesa-va-drivers` and `mesa-vdpau-drivers`.
 - NVIDIA uses RPM Fusion:
   - `akmod-nvidia`
